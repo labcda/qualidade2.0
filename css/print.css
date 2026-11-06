@@ -1,0 +1,17 @@
+/* Impressão: papel timbrado A4. Fitas, cabeçalho, ficha lateral e contatos se repetem em todas as folhas. */
+@page{size:A4;margin:0}
+@media print{
+  html,body{background:#fff!important;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #side,.topo,.barra-doc,.voltar,.toast,.ov,.nao-imprime,#login{display:none!important}
+  #app{display:block}#main{padding:0}
+  .fundo-folha{background:none;padding:0;border-radius:0;overflow:visible}
+  .folha{width:210mm;min-height:0;margin:0;box-shadow:none;overflow:visible;zoom:1;transform:none}
+  .folha .orn,.folha .cab,.folha .regua,.folha .lateral,.folha .rodape{position:fixed}
+  .folha .orn-topo{top:0;left:0}.folha .orn-base{bottom:0;right:0}
+  .folha .miolo{padding:0 18mm 0 70mm}
+  .folha thead{display:table-header-group}.folha tfoot{display:table-footer-group}
+  .folha h2,.folha h3{break-after:avoid}.folha tr,.folha blockquote,.folha li{break-inside:avoid}
+  .rel{width:190mm;margin:0 auto;padding:14mm 0}
+  .rel.folha-rel .cab-r{display:flex;align-items:center;gap:4mm;border-bottom:.8mm solid var(--tq);padding-bottom:3mm;margin-bottom:4mm}
+  .rel tr{break-inside:avoid}.rel .tit-d{break-after:avoid}.quebra{break-before:page}
+}
