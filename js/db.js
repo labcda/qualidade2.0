@@ -27,6 +27,23 @@
       var s = (await sb.auth.getSession()).data.session; if (!s) return null;
       return DB._perfil(s.user);
     },
+    /* Entrada única: dentro do painel CDA (iframe), o painel entrega um token de uso único e o login do painel vale aqui também. */
+    sso() {
+      return new Promise(function (res) {
+        if (demo || window.parent === window) return res(null);
+        var feito = false, T = null;
+        function fim(v) { if (feito) return; feito = true; clearTimeout(T); window.removeEventListener('message', on); res(v); }
+        function origemOk(o) { return /^https:\/\/([a-z0-9-]+\.)?painel-cda\.pages\.dev$/.test(o) || /^http:\/\/localhost:\d+$/.test(o); }
+        async function on(e) {
+          if (!origemOk(e.origin)) return; var m = e.data; if (!m || m.tipo !== 'q2-sso') return;
+          if (m.erro || !m.token_hash) return fim(null);
+          try { var r = await sb.auth.verifyOtp({ token_hash: m.token_hash, type: 'magiclink' }); if (r.error) throw r.error; fim(await DB._perfil(r.data.user)); } catch (er) { console.warn('[sso]', er); fim(null); }
+        }
+        window.addEventListener('message', on);
+        try { window.parent.postMessage({ tipo: 'q2-pronto' }, '*'); } catch (e) { return fim(null); }
+        T = setTimeout(function () { fim(null); }, 9000);
+      });
+    },
     async _perfil(u) {
       var p = await q(sb.from('q2_perfis').select('*').eq('id', u.id).maybeSingle());
       if (!p) throw new Error('Seu usuário ainda não tem perfil. Peça ao administrador para liberar o acesso.');
