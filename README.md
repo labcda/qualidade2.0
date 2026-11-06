@@ -2,7 +2,7 @@
 
 Sistema de gestão da qualidade do CDA, separado do painel ADM. Reúne:
 
-- **Programa Unimed** — os 141 requisitos da autoavaliação (portal Valor Conecta), com resposta, constatação e evidências ligadas a documentos, documentos legais e registros.
+- **Autoavaliação** — os 141 requisitos da autoavaliação (portal Valor Conecta), com resposta, constatação e evidências ligadas a documentos, documentos legais e registros.
 - **Documentos** — biblioteca (MQ, PQ, ITA, FR, DC, L) lida e impressa dentro do sistema, no papel timbrado turquesa; versões, histórico, revisão e aprovação do RT.
 - **Documentos legais** — licença sanitária, alvará, CNES, AVCB, contratos… com número, validade, anexo e aviso de vencimento.
 - **Registros do dia** — temperaturas (primeira rotina migrada).

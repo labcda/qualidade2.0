@@ -57,7 +57,7 @@ foreach ($d in Get-ChildItem -LiteralPath $Pasta -Directory) {
     $txt = Converte $f.FullName
     $ver = '1'; if ($txt -match '\|\s*(\d+(?:\.\d+)?)\s*\(rascunho\)') { $ver = $Matches[1] }
     $ix = $txt.IndexOf('## '); if ($ix -gt 0) { $txt = $txt.Substring($ix) }
-    $txt = ($txt -replace '(?m)^[●•]\s*', '- ')
+    $txt = ($txt -replace '[ \t]*[●•][ \t]*', "`n- ")   # marcadores no meio do parágrafo viram itens de lista em linhas separadas
     $lista += [pscustomobject]@{ codigo = $cod; titulo = $tit; tipo = $tipo; unidade = $unid; versao = $ver; status = 'rascunho'; elaborador = ('Di' + [char]0xEA + 'go Padua Silva'); data_elaboracao = '2026-10-13'; origem = 'Biblioteca CDA 10/2026'; texto = $txt }
   }
 }

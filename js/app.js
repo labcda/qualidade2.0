@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [] }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [] }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -10,10 +10,12 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
+  var BIB_VER = '2026-11-06b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3];
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje())]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
+    if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return d.origem === 'Biblioteca CDA 10/2026'; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
   async function semear(silencioso) {
     var docs = (window.Q2_DOCS || []).map(function (d) { return Object.assign({ unidade: 'Matriz', versao: '1', status: 'rascunho', elaborador: 'Diêgo Padua Silva', data_elaboracao: '2026-11-06' }, d); });
@@ -24,6 +26,10 @@
   }
   function resp(r) { var x = S.d.resp[r[0]]; return x ? { v: x.resposta, c: x.constatacao || '', f: !!x.futuro } : { v: r[5], c: r[9] || '', f: !!r[7] }; }
   function docPorCod(c) { return S.d.docs.filter(function (d) { return d.codigo === c && d.status !== 'obsoleto'; })[0]; }
+  function somaDias(d, n) { var x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+  /* formulários preenchidos dentro do sistema = evidência automática. Cada formulário (FR) aponta para os tipos de equipamento que registra. */
+  var FR_TEMP = { 'FR 001': ['geladeira', 'freezer'], 'FR 009': ['banho-maria'], 'FR 010': ['ambiente'] };
+  function regsDoForm(cod) { var tp = FR_TEMP[cod]; if (!tp) return []; var ids = S.d.equip.filter(function (e) { return tp.indexOf(e.tipo) >= 0; }).map(function (e) { return e.id; }); return S.d.temps.filter(function (t) { return ids.indexOf(t.equip_id) >= 0; }); }
   function legaisDoTipo(t) { return S.d.legais.filter(function (l) { return l.tipo === t; }); }
   function legalSit(l) { var n = dias(l.validade); if (!l.validade) return { c: '#94a3b8', t: 'Sem validade' }; if (n < 0) return { c: '#dc2626', t: 'Vencido há ' + (-n) + ' d' }; if (n <= 60) return { c: '#d97706', t: 'Vence em ' + n + ' d' }; return { c: '#16a34a', t: 'Em dia · ' + MD.fmtData(l.validade) }; }
   /* comprovação automática: documentos da biblioteca + documentos legais cadastrados + evidências manuais */
@@ -36,7 +42,7 @@
   function contagem(lista) { var o = { A: 0, P: 0, N: 0, NA: 0, F: 0, t: 0, sem: 0 }; lista.forEach(function (r) { var x = resp(r); o.t++; if (x.f && x.v !== 'A') o.F++; else o[x.v]++; if (!prova(r).ok && x.v !== 'NA' && !x.f) o.sem++; }); return o; }
 
   /* ---------- estrutura ---------- */
-  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Programa Unimed'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
+  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
   function irPara(p, extra) { S.pg = p; if (extra) Object.assign(S, extra); if (p !== 'docs') S.docId = null; render(); window.scrollTo(0, 0); $('side').classList.remove('aberto'); history.replaceState(null, '', '#' + p); }
   function menu() {
     var u = DB.user, pend = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).length;
@@ -47,7 +53,7 @@
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
   function render() {
     menu(); var m = $('main');
-    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
+    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
     m.innerHTML = f();
     if (S.pg === 'inicio') requestAnimationFrame(function () { document.querySelectorAll('.bar i[data-w]').forEach(function (e) { e.style.width = e.dataset.w + '%'; }); var a = $('anelc'); if (a) a.style.strokeDashoffset = a.dataset.off; });
   }
@@ -60,10 +66,10 @@
     var vencendo = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).sort(function (a, b) { return dias(a.validade) - dias(b.validade); });
     var falta = REQ.filter(function (r) { var x = resp(r); return (x.v === 'N' || x.v === 'P') && !x.f; });
     var rasc = S.d.docs.filter(function (d) { return d.status === 'rascunho' || d.status === 'em_revisao'; });
-    var o = topo(sd + ', ' + h((u.nome || '').split(' ')[0]), 'Sua central de qualidade para o programa da Unimed e para a acreditação');
+    var o = topo(sd + ', ' + h((u.nome || '').split(' ')[0]), 'Sua central de qualidade para a autoavaliação dos prestadores e para a acreditação');
     if (!S.d.docs.length) o += '<div class="vidro pad" style="margin-bottom:18px;border-left:6px solid #d97706"><b>Biblioteca ainda vazia.</b> <span style="color:var(--mut)">Carregue os documentos iniciais (POPs, instruções, formulários e os novos para a Unimed) e a autoavaliação de 06/11/2026.</span><div style="margin-top:12px"><button class="btn p" data-semear>Carregar biblioteca inicial</button></div></div>';
     o += '<div class="vidro heroi anim"><div class="anel"><svg width="170" height="170" viewBox="0 0 170 170"><circle cx="85" cy="85" r="70" fill="none" stroke="rgba(16,181,164,.15)" stroke-width="16"/><circle id="anelc" cx="85" cy="85" r="70" fill="none" stroke="url(#ga)" stroke-width="16" stroke-linecap="round" stroke-dasharray="' + C + '" stroke-dashoffset="' + C + '" data-off="' + (C * (1 - pct / 100)) + '" style="transition:stroke-dashoffset 1.3s cubic-bezier(.2,.8,.2,1)"/><defs><linearGradient id="ga" x1="0" x2="1"><stop offset="0" stop-color="#0e9aa7"/><stop offset="1" stop-color="#22c55e"/></linearGradient></defs></svg><div class="c"><div><b>' + pct + '%</b><small>dos requisitos atendidos</small></div></div></div>' +
-      '<div><h2>Programa Unimed · autoavaliação</h2><p>' + tot.A + ' de ' + apl + ' requisitos aplicáveis atendem. ' + (falta.length ? 'Faltam ' + falta.length + ' para chegar a 100%.' : 'Tudo atendido, parabéns!') + (tot.sem ? ' <b style="color:#b91c1c">' + tot.sem + ' ainda sem comprovação no sistema.</b>' : ' Todos têm comprovação.') + '</p><div class="leg"><span><i style="background:' + RCOR.A + '"></i>' + tot.A + ' atendem</span><span><i style="background:' + RCOR.P + '"></i>' + tot.P + ' parciais</span><span><i style="background:' + RCOR.N + '"></i>' + tot.N + ' não atendem</span><span><i style="background:' + RCOR.F + '"></i>' + tot.F + ' futuros</span><span><i style="background:' + RCOR.NA + '"></i>' + tot.NA + ' n/a</span></div><div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-ir="programa">Ver requisitos</button><button class="btn s" data-ir="relatorio">Relatório para imprimir</button></div></div></div>';
+      '<div><h2>Autoavaliação · autoavaliação</h2><p>' + tot.A + ' de ' + apl + ' requisitos aplicáveis atendem. ' + (falta.length ? 'Faltam ' + falta.length + ' para chegar a 100%.' : 'Tudo atendido, parabéns!') + (tot.sem ? ' <b style="color:#b91c1c">' + tot.sem + ' ainda sem comprovação no sistema.</b>' : ' Todos têm comprovação.') + '</p><div class="leg"><span><i style="background:' + RCOR.A + '"></i>' + tot.A + ' atendem</span><span><i style="background:' + RCOR.P + '"></i>' + tot.P + ' parciais</span><span><i style="background:' + RCOR.N + '"></i>' + tot.N + ' não atendem</span><span><i style="background:' + RCOR.F + '"></i>' + tot.F + ' futuros</span><span><i style="background:' + RCOR.NA + '"></i>' + tot.NA + ' n/a</span></div><div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-ir="programa">Ver requisitos</button><button class="btn s" data-ir="relatorio">Relatório para imprimir</button></div></div></div>';
     o += '<h2 class="sec">Os 5 domínios</h2><div class="grade g5 anim">' + Object.keys(DOM).map(function (k) { var c = contagem(REQ.filter(function (r) { return r[1] === k; })), a = c.t - c.NA; return '<button class="vidro dom" data-dom="' + k + '"><span class="d">' + k + '</span><b>' + DOM[k].nome + '</b>' + barra(c, c.t) + '<div class="n"><span>' + c.A + ' de ' + c.t + '</span><span>' + (a ? Math.round(c.A / a * 100) : 0) + '%</span></div></button>'; }).join('') + '</div>';
     o += '<h2 class="sec">Precisa de atenção <span>' + (vencendo.length + Math.min(falta.length, 6) + rasc.length) + '</span></h2><div class="lista anim">';
     vencendo.slice(0, 4).forEach(function (l) { var s = legalSit(l); o += '<button class="acao" style="--c:' + s.c + '" data-ir="legais"><span class="ic">⚖</span><span class="t"><b>' + h(LEG_NOME[l.tipo] || l.descricao) + '</b><small>' + s.t + (l.numero ? ' · nº ' + h(l.numero) : '') + '</small></span><span class="selo" style="background:#fff;color:' + s.c + '">Documento legal</span></button>'; });
@@ -77,7 +83,7 @@
   var FILTROS = [['todos', 'Todos'], ['A', 'Atendem'], ['P', 'Parciais'], ['N', 'Não atendem'], ['F', 'Futuros'], ['sem', 'Sem comprovação']];
   function passa(r) { var x = resp(r), f = S.filtro; if (f === 'todos') return true; if (f === 'F') return x.f; if (f === 'sem') return !prova(r).ok && x.v !== 'NA' && !x.f; return !x.f && x.v === f; }
   function pgPrograma() {
-    var o = topo('Programa Unimed', 'Autoavaliação do portal Valor Conecta · 141 requisitos', '<button class="btn" data-ir="relatorio">⎙ Relatório</button>');
+    var o = topo('Autoavaliação', 'Autoavaliação do portal Valor Conecta · 141 requisitos', '<button class="btn" data-ir="relatorio">⎙ Relatório</button>');
     o += '<div class="dtab">' + Object.keys(DOM).map(function (k) { var c = contagem(REQ.filter(function (r) { return r[1] === k; })); return '<button class="' + (S.dom === k ? 'on' : '') + '" data-dom="' + k + '">' + k + ' · ' + DOM[k].nome + '<small>' + c.A + '/' + c.t + ' atendem</small></button>'; }).join('') + '</div>';
     o += '<p style="color:var(--mut);margin:0 0 14px;font-size:.88rem">' + DOM[S.dom].desc + '</p><div class="chips">' + FILTROS.map(function (f) { return '<button class="chip' + (S.filtro === f[0] ? ' on' : '') + '" data-filtro="' + f[0] + '">' + (RCOR[f[0]] ? '<i style="--c:' + RCOR[f[0]] + '"></i>' : '') + f[1] + '</button>'; }).join('') + '</div>';
     var grupos = []; REQ.filter(function (r) { return r[1] === S.dom; }).forEach(function (r) { if (grupos.indexOf(r[2]) < 0) grupos.push(r[2]); });
@@ -93,8 +99,8 @@
   }
   function reqHTML(r) {
     var x = resp(r), p = prova(r), cor = x.f ? RCOR.F : RCOR[x.v], pode = DB.pode('escrever');
-    var ev = p.docs.map(function (e) { return e.d ? '<button class="tg" data-doc="' + e.d.id + '" title="' + h(e.d.titulo) + '">▤ ' + h(e.c) + ' <small>v' + h(e.d.versao) + '</small></button>' : '<span class="tg sem" title="Ainda não existe no sistema">✗ ' + h(e.c) + '</span>'; }).join('');
-    ev += p.legais.map(function (l) { var s = legalSit(l); return '<button class="tg" data-ir="legais" style="border-left:4px solid ' + s.c + '">⚖ ' + h(LEG_NOME[l.tipo]) + (l.numero ? ' nº ' + h(l.numero) : '') + '</button>'; }).join('');
+    var ev = p.docs.map(function (e) { var nr = e.d ? regsDoForm(e.c).length : 0; if (nr) return '<button class="tg ok" data-rel="' + e.c + '" title="Abrir o relatório dos registros preenchidos no sistema">✔ ' + h(e.c) + ' · ' + nr + ' registros <small>ver relatório</small></button>'; return e.d ? '<button class="tg" data-doc="' + e.d.id + '" title="' + h(e.d.titulo) + '">▤ ' + h(e.c) + ' <small>v' + h(e.d.versao) + '</small></button>' : '<span class="tg sem" title="Ainda não existe no sistema">✗ ' + h(e.c) + '</span>'; }).join('');
+    ev += p.legais.map(function (l) { var s = legalSit(l); return '<button class="tg' + (l.arquivo_path ? ' ok' : '') + '" ' + (l.arquivo_path ? 'data-anexo="' + l.id + '" title="Abrir o documento anexado"' : 'data-ir="legais" title="Sem anexo ainda: abrir o cadastro"') + ' style="border-left:4px solid ' + s.c + '">' + (l.arquivo_path ? '✔ 📎 ' : '⚖ ') + h(LEG_NOME[l.tipo]) + (l.numero ? ' nº ' + h(l.numero) : '') + '</button>'; }).join('');
     ev += p.manuais.map(function (e) { return '<span class="tg">' + (e.tipo === 'link' ? '<a href="' + h(e.ref) + '" target="_blank" rel="noopener" style="color:inherit">🔗 ' + h(e.nota || e.ref) + '</a>' : '📝 ' + h(e.nota || e.ref)) + (pode ? ' <b data-delev="' + e.id + '" style="cursor:pointer" title="Remover">×</b>' : '') + '</span>'; }).join('');
     if (r[8] && !p.legais.length) ev += '<button class="tg sem" data-ir="legais">⚖ Cadastrar ' + h(LEG_NOME[r[8]]) + '</button>';
     return '<div class="req" data-r-cod="' + r[0] + '" style="--cs:' + cor + '"><div class="l1"><span class="cod">' + r[0] + '</span><p>' + h(r[3]) + '</p><span class="selo ' + (x.f ? 'F' : x.v) + '">' + (x.f ? 'Futuro' : RLAB[x.v]) + '</span></div><div class="base">' + h(r[4]) + '</div>' +
@@ -134,7 +140,7 @@
     var o = '<button class="voltar" data-voltar>← Voltar aos documentos</button><div class="barra-doc topo"><h1>' + h(d.codigo) + '<small>' + h(d.titulo) + '</small></h1><span class="selo ' + d.status + '">' + MD.ST[d.status] + '</span>' +
       '<button class="btn" data-imprimir>🖨 Imprimir</button>' + (pode ? '<button class="btn s" data-editar>✎ Editar</button>' : '') + (pode && d.status === 'rascunho' ? '<button class="btn s" data-sit="em_revisao">Enviar para revisão</button>' : '') + (DB.pode('aprovar') && d.status !== 'vigente' ? '<button class="btn" style="background:#16a34a" data-sit="vigente">✔ Aprovar e publicar</button>' : '') + (pode && d.status === 'vigente' ? '<button class="btn s" data-novaver>Nova versão</button>' : '') + '<button class="btn s" data-hist>Histórico</button></div>';
     o += '<div class="fundo-folha">' + MD.folha(d, d.texto && d.texto.length > 10 ? MD.md(d.texto) : '<div class="vazio nao-imprime">Este documento ainda não tem texto no sistema. ' + (pode ? 'Clique em Editar para escrever ou colar o conteúdo.' : '') + '</div>') + '</div>';
-    if (reqs.length) o += '<div class="vidro pad nao-imprime" style="margin-top:18px"><b>Este documento comprova na Unimed:</b><div class="chips" style="margin:10px 0 0">' + reqs.map(function (r) { return '<button class="chip" data-req="' + r[0] + '">' + r[0] + '</button>'; }).join('') + '</div></div>';
+    if (reqs.length) o += '<div class="vidro pad nao-imprime" style="margin-top:18px"><b>Este documento comprova os requisitos:</b><div class="chips" style="margin:10px 0 0">' + reqs.map(function (r) { return '<button class="chip" data-req="' + r[0] + '">' + r[0] + '</button>'; }).join('') + '</div></div>';
     return o;
   }
   function editarDoc(d) {
@@ -162,13 +168,52 @@
     modal('<h3>Histórico de ' + h(d.codigo) + '</h3>' + (l.length ? '<table class="tbl"><thead><tr><th>Quando</th><th>Versão</th><th>Quem</th><th>O quê</th></tr></thead><tbody>' + l.map(function (v) { return '<tr><td>' + new Date(v.criado_em).toLocaleString('pt-BR') + '</td><td>' + h(v.versao) + '</td><td>' + h(v.autor) + '</td><td>' + h(v.motivo) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="vazio">Sem alterações registradas ainda.</div>') + '<div class="bt"><button class="btn s" data-x>Fechar</button></div>', function (o) { o.querySelector('[data-x]').onclick = o.fechar; });
   }
 
+  /* ---------- relatório de evidência (registros feitos no sistema) ---------- */
+  function pgEvid() {
+    var cod = S.rel && S.rel.cod, nd = (S.rel && S.rel.dias) || 30; if (!cod) return pgInicio();
+    var d = docPorCod(cod) || { codigo: cod, titulo: cod, versao: '1', status: 'vigente' }, de = somaDias(hoje(), -nd), ate = hoje();
+    var regs = regsDoForm(cod).filter(function (t) { return t.dia >= de && t.dia <= ate; }).sort(function (a, b) { return a.dia < b.dia ? -1 : a.dia > b.dia ? 1 : (a.criado_em || '') < (b.criado_em || '') ? -1 : 1; });
+    var eq = {}; S.d.equip.forEach(function (e) { eq[e.id] = e; });
+    var desv = regs.filter(function (t) { return t.situacao !== 'ok'; });
+    var o = '<button class="voltar" data-voltar-ev>← Voltar</button><div class="barra-doc topo"><h1>Relatório de evidência<small>' + h(d.codigo + ' · ' + d.titulo) + '</small></h1><select id="ev-per" style="width:auto"><option value="30"' + (nd === 30 ? ' selected' : '') + '>Últimos 30 dias</option><option value="90"' + (nd === 90 ? ' selected' : '') + '>Últimos 90 dias</option><option value="180"' + (nd === 180 ? ' selected' : '') + '>Últimos 180 dias</option><option value="365"' + (nd === 365 ? ' selected' : '') + '>Últimos 12 meses</option></select><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>';
+    var c = '<p>Relatório gerado automaticamente a partir dos registros preenchidos no sistema, no período de <b>' + MD.fmtData(de) + '</b> a <b>' + MD.fmtData(ate) + '</b>. Emitido em ' + MD.fmtData(hoje()) + ' por ' + h(DB.user ? DB.user.nome : '') + '.</p>';
+    if (!regs.length) c += '<p><b>Nenhum registro neste período.</b></p>';
+    else {
+      c += '<h2>Resumo</h2><table><thead><tr><th>Equipamento</th><th>Faixa</th><th>Registros</th><th>Mínima</th><th>Máxima</th><th>Média</th><th>Fora da faixa</th></tr></thead><tbody>';
+      var ids = []; regs.forEach(function (t) { if (ids.indexOf(t.equip_id) < 0) ids.push(t.equip_id); });
+      ids.forEach(function (id) { var l = regs.filter(function (t) { return t.equip_id === id; }), v = l.map(function (t) { return Number(t.valor); }), e = eq[id] || {}; c += '<tr><td>' + h(e.nome || l[0].equip_nome || '') + '</td><td>' + e.minimo + ' a ' + e.maximo + ' °C</td><td>' + l.length + '</td><td>' + Math.min.apply(null, v).toFixed(1) + '</td><td>' + Math.max.apply(null, v).toFixed(1) + '</td><td>' + (v.reduce(function (a, b) { return a + b; }, 0) / v.length).toFixed(1) + '</td><td>' + l.filter(function (t) { return t.situacao !== 'ok'; }).length + '</td></tr>'; });
+      c += '</tbody></table><h2>Registros</h2><table><thead><tr><th>Data</th><th>Turno</th><th>Equipamento</th><th>°C</th><th>Situação</th><th>Ação corretiva</th><th>Responsável</th></tr></thead><tbody>' + regs.map(function (t) { return '<tr><td>' + MD.fmtData(t.dia) + '</td><td>' + h(t.turno || '') + '</td><td>' + h((eq[t.equip_id] || {}).nome || t.equip_nome || '') + '</td><td>' + t.valor + '</td><td>' + (t.situacao === 'ok' ? 'Conforme' : '<b>Desvio</b>') + '</td><td>' + h(t.acao || '') + '</td><td>' + h(t.usuario || '') + '</td></tr>'; }).join('') + '</tbody></table>';
+      c += '<p>' + regs.length + ' registros, ' + desv.length + ' fora da faixa' + (desv.length ? ', todos com ação corretiva descrita acima.' : '.') + '</p>';
+    }
+    return o + '<div class="fundo-folha">' + MD.folha(Object.assign({}, d, { titulo: 'Relatório de evidência · ' + d.titulo }), c) + '</div>';
+  }
+
   /* ---------- documentos legais ---------- */
   function pgLegais() {
-    var o = topo('Documentos legais', 'Licenças, alvarás, certificados e contratos, com aviso de vencimento', DB.pode('escrever') ? '<button class="btn" data-novolegal>＋ Cadastrar documento</button>' : '');
-    var obrig = window.Q2_LEGAIS.filter(function (l) { return l[2] && !S.d.legais.some(function (x) { return x.tipo === l[0]; }); });
-    var l = S.d.legais.slice().sort(function (a, b) { var x = dias(a.validade), y = dias(b.validade); return (x === null ? 9e5 : x) - (y === null ? 9e5 : y); });
-    o += l.length ? '<div class="cards anim">' + l.map(function (x) { var s = legalSit(x); return '<div class="vidro dc" style="border-left-color:' + s.c + ';cursor:default"><span class="cd">' + h((LEG_NOME[x.tipo] || 'Documento').toUpperCase()) + '</span><b>' + h(x.descricao || LEG_NOME[x.tipo]) + '</b><div class="rod"><span class="sem" style="background:' + s.c + '"></span><span style="color:' + s.c + '">' + s.t + '</span>' + (x.numero ? '<span>nº ' + h(x.numero) + '</span>' : '') + (x.orgao ? '<span>' + h(x.orgao) + '</span>' : '') + '</div><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' + (x.arquivo_path ? '<button class="btn p s" data-anexo="' + x.id + '">📎 Abrir anexo</button>' : '') + (DB.pode('escrever') ? '<button class="btn p s" data-edlegal="' + x.id + '">Editar</button><button class="btn p v" data-dellegal="' + x.id + '">Remover</button>' : '') + '</div></div>'; }).join('') + '</div>' : '<div class="vazio">Nenhum documento legal cadastrado ainda.</div>';
-    if (obrig.length) o += '<h2 class="sec">Ainda não cadastrados <span>' + obrig.length + '</span></h2><div class="chips">' + obrig.map(function (x) { return '<button class="chip" data-novolegal="' + x[0] + '"><i style="--c:#d97706"></i>' + h(x[1]) + ' <small style="color:var(--mut)">(' + x[2] + ')</small></button>'; }).join('') + '</div>';
+    var pode = DB.pode('escrever');
+    var GR = [['Licenças e autorizações', 'Para funcionar legalmente', ['licenca_sanitaria', 'alvara', 'cnes', 'avcb', 'certificado_rt', 'licenca_ambiental', 'pgrss']], ['Contratos', 'Serviços e parceiros', ['contrato_proficiencia', 'contrato_apoio', 'contrato_manutencao', 'contrato_servico_critico']], ['Certificações', 'Planejamento futuro: acreditação e qualidade monitorada', ['acreditacao', 'qualiss', 'iso'], 1], ['Outros documentos', 'Qualquer outro documento com validade', ['outro']]];
+    var cod = {}; window.Q2_LEGAIS.forEach(function (x) { cod[x[0]] = x[2]; });
+    var todos = S.d.legais, emDia = 0, vence = 0, venc = 0, falta = 0;
+    todos.forEach(function (x) { var n = dias(x.validade); if (n !== null && n < 0) venc++; else if (n !== null && n <= 60) vence++; else emDia++; });
+    GR.forEach(function (g) { if (!g[3] && g[2][0] !== 'outro') g[2].forEach(function (t) { if (!todos.some(function (x) { return x.tipo === t; })) falta++; }); });
+    var o = topo('Documentos legais', 'Licenças, alvarás, certificados e contratos, com aviso de vencimento', pode ? '<button class="btn" data-novolegal>＋ Cadastrar documento</button>' : '');
+    o += '<div class="lg-res anim">' + [['Em dia', emDia, '#16a34a'], ['Vencem em até 60 dias', vence, '#d97706'], ['Vencidos', venc, '#dc2626'], ['Ainda não cadastrados', falta, '#64748b']].map(function (c) { return '<div class="vidro" style="--c:' + c[2] + '"><b>' + c[1] + '</b><span>' + c[0] + '</span></div>'; }).join('') + '</div>';
+    GR.forEach(function (g) {
+      var linhas = '';
+      g[2].forEach(function (t) {
+        var regs = todos.filter(function (x) { return x.tipo === t; }).sort(function (a, b) { var p = dias(a.validade), q = dias(b.validade); return (p === null ? 9e5 : p) - (q === null ? 9e5 : q); });
+        var nome = LEG_NOME[t], c = cod[t] ? '<small class="lg-cod">req. ' + cod[t] + '</small>' : '';
+        if (!regs.length) {
+          if (t === 'outro') return;
+          linhas += '<div class="lg-l vazio-l"><i class="pt" style="--c:#cbd5e1"></i><div class="lg-n"><b>' + h(nome) + '</b>' + c + '</div><div class="lg-s" style="color:var(--mut)">' + (g[3] ? 'Previsto para o futuro' : 'Não cadastrado') + '</div><div class="lg-m"></div><div class="lg-a">' + (pode ? '<button class="btn p s" data-novolegal="' + t + '">＋ Cadastrar</button>' : '') + '</div></div>';
+        } else regs.forEach(function (x) {
+          var s = legalSit(x);
+          linhas += '<div class="lg-l"><i class="pt" style="--c:' + s.c + '"></i><div class="lg-n"><b>' + h(x.descricao || nome) + '</b>' + (t === 'outro' ? '' : c) + '</div><div class="lg-s" style="color:' + s.c + '">' + s.t + '</div><div class="lg-m">' + (x.numero ? 'nº ' + h(x.numero) : '') + (x.orgao ? '<small>' + h(x.orgao) + '</small>' : '') + '</div><div class="lg-a">' + (x.arquivo_path ? '<button class="btn p s" data-anexo="' + x.id + '">📎 Anexo</button>' : '') + (pode ? '<button class="btn p s" data-edlegal="' + x.id + '">Editar</button><button class="btn p v s" data-dellegal="' + x.id + '">Remover</button>' : '') + '</div></div>';
+        });
+      });
+      if (g[2][0] === 'outro' && !linhas) return;
+      o += '<section class="vidro lg-g anim' + (g[3] ? ' fut' : '') + '"><header><h2>' + g[0] + '</h2><span>' + g[1] + '</span></header>' + linhas + '</section>';
+    });
     return o;
   }
   function editarLegal(l, tipo) {
@@ -209,8 +254,8 @@
   /* ---------- relatório ---------- */
   function pgRelatorio() {
     var tot = contagem(REQ), apl = tot.t - tot.NA, C = window.Q2_CONFIG.LAB, hojeBR = new Date().toLocaleDateString('pt-BR');
-    var o = '<div class="topo nao-imprime"><button class="menu-m" data-menu>☰ Menu</button><h1>Relatório de conformidade<small>Prova de que cada requisito da Unimed tem comprovação no sistema</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>';
-    o += '<div class="vidro pad rel" style="background:#fff"><div class="cab-r" style="display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--tq);padding-bottom:12px;margin-bottom:14px"><img src="img/logo-cda.png" style="height:56px"><div style="flex:1"><h2 style="font-size:16pt;color:var(--esc)">Relatório de conformidade · Programa Unimed</h2><div style="font-size:9pt;color:#55777a">' + h(C.nome) + ' · ' + h(C.fone) + ' · ' + h(C.email) + ' · emitido em ' + hojeBR + '</div></div></div>';
+    var o = '<div class="topo nao-imprime"><button class="menu-m" data-menu>☰ Menu</button><h1>Relatório de conformidade<small>Prova de que cada requisito tem comprovação no sistema</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>';
+    o += '<div class="vidro pad rel" style="background:#fff"><div class="cab-r" style="display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--tq);padding-bottom:12px;margin-bottom:14px"><img src="img/logo-cda.png" style="height:56px"><div style="flex:1"><h2 style="font-size:16pt;color:var(--esc)">Relatório de conformidade · Autoavaliação</h2><div style="font-size:9pt;color:#55777a">' + h(C.nome) + ' · ' + h(C.fone) + ' · ' + h(C.email) + ' · emitido em ' + hojeBR + '</div></div></div>';
     o += '<p style="font-size:10pt">Resumo da autoavaliação (portal Valor Conecta): <b>' + tot.A + ' de ' + apl + '</b> requisitos aplicáveis atendem (<b>' + (apl ? Math.round(tot.A / apl * 100) : 0) + '%</b>); ' + tot.P + ' parciais, ' + tot.N + ' não atendem, ' + tot.F + ' marcados como evolução futura e ' + tot.NA + ' não se aplicam. ' + (tot.sem ? '<b>' + tot.sem + ' requisitos ainda sem comprovação.</b>' : 'Todos os requisitos aplicáveis possuem comprovação.') + '</p>';
     o += '<table><thead><tr><th>Domínio</th><th>Requisitos</th><th>Atendem</th><th>Parciais</th><th>Não atendem</th><th>Futuros</th><th>N/A</th><th>% atende</th></tr></thead><tbody>' + Object.keys(DOM).map(function (k) { var c = contagem(REQ.filter(function (r) { return r[1] === k; })), a = c.t - c.NA; return '<tr><td><b>' + k + ' · ' + DOM[k].nome + '</b></td><td>' + c.t + '</td><td>' + c.A + '</td><td>' + c.P + '</td><td>' + c.N + '</td><td>' + c.F + '</td><td>' + c.NA + '</td><td><b>' + (a ? Math.round(c.A / a * 100) : 0) + '%</b></td></tr>'; }).join('') + '</tbody></table>';
     Object.keys(DOM).forEach(function (k) {
@@ -263,6 +308,8 @@
     if ((a = t.closest('[data-filtro]'))) { S.filtro = a.dataset.filtro; return render(); }
     if ((a = t.closest('[data-grp]'))) { S.aberto[a.dataset.grp] = !S.aberto[a.dataset.grp]; var s = a.closest('.grp'); s.classList.toggle('aberto', S.aberto[a.dataset.grp]); return; }
     if ((a = t.closest('[data-req]'))) { var r = REQ.filter(function (x) { return x[0] === a.dataset.req; })[0]; S.filtro = 'todos'; S.aberto[r[2]] = true; return irPara('programa', { dom: r[1], alvo: r[0] }); }
+    if ((a = t.closest('[data-rel]'))) return irPara('evid', { rel: { cod: a.dataset.rel, dias: 30 } });
+    if (t.closest('[data-voltar-ev]')) return irPara('programa');
     if ((a = t.closest('[data-doc]'))) return irPara('docs', { docId: a.dataset.doc });
     if (t.closest('[data-voltar]')) { S.docId = null; return render(); }
     if (t.closest('[data-imprimir]')) return window.print();
@@ -293,7 +340,7 @@
   document.addEventListener('input', function (e) {
     if (e.target.id === 'f-q') { S.busca = e.target.value; var p = e.target.selectionStart; render(); var n = $('f-q'); if (n) { n.focus(); n.setSelectionRange(p, p); } }
   });
-  document.addEventListener('change', function (e) { if (e.target.id === 'f-t') { S.tipo = e.target.value; render(); } if (e.target.id === 'f-s') { S.situ = e.target.value; render(); } if (e.target.id === 'r-dia') { S.rdia = e.target.value || hoje(); carregaTemp(); } });
+  document.addEventListener('change', function (e) { if (e.target.id === 'f-t') { S.tipo = e.target.value; render(); } if (e.target.id === 'f-s') { S.situ = e.target.value; render(); } if (e.target.id === 'ev-per') { S.rel.dias = Number(e.target.value); render(); } if (e.target.id === 'r-dia') { S.rdia = e.target.value || hoje(); carregaTemp(); } });
   document.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && DB.user) { e.preventDefault(); busca(); } });
 
   /* ---------- entrada ---------- */
