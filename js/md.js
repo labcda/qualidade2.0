@@ -27,16 +27,24 @@
   var ST = { rascunho: 'Rascunho', em_revisao: 'Em revisão', vigente: 'Vigente', obsoleto: 'Obsoleto' };
   function fmtData(d) { if (!d) return '—'; var p = String(d).slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; }
   /* papel timbrado: usa o modelo escolhido (logo, linha, coluna lateral com ficha, rodapé de contato), na paleta do sistema */
+  /* assinaturas cadastradas no sistema (Ajustes › Assinaturas): nome normalizado -> { imagem, cargo, registro } */
+  var ASSIN = {};
+  function chave(n) { return String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  function setAssin(l) { ASSIN = {}; (l || []).forEach(function (a) { if (a.ativo !== false && a.imagem) ASSIN[chave(a.nome)] = a; }); }
+  function bloco(nome, rot, data, assinou) {
+    var a = assinou ? ASSIN[chave(nome)] : null;
+    return '<div>' + (a ? '<img class="sig" src="' + esc(a.imagem) + '" alt="Assinatura de ' + esc(nome) + '">' : '<span class="ln"></span>') + '<b>' + esc(nome || '—') + '</b><small>' + (a && a.cargo ? esc(a.cargo) + (a.registro ? ' · ' + esc(a.registro) : '') + ' · ' : '') + rot + (data ? ' · ' + fmtData(data) : '') + (a ? ' · assinado eletronicamente' : '') + '</small></div>';
+  }
   function folha(d, corpo, opt) {
     opt = opt || {}; var C = window.Q2_CONFIG.LAB, hoje = new Date().toLocaleDateString('pt-BR');
     var ficha = '<div class="fi-bloco"><span class="fi-nome">' + esc(d.codigo || '') + '</span><span class="fi-cargo">' + esc(d.tipo === 'FR' ? 'Formulário' : d.tipo === 'MQ' ? 'Manual da Qualidade' : d.tipo === 'ITA' ? 'Instrução de trabalho' : d.tipo === 'DC' ? 'Descrição de cargo' : d.tipo === 'L' ? 'Lista' : 'Procedimento') + '</span></div>' +
       '<dl class="fi-dl"><dt>Versão</dt><dd>' + esc(d.versao || '1') + '</dd><dt>Situação</dt><dd>' + esc(ST[d.status] || d.status || '') + '</dd><dt>Vigência</dt><dd>' + fmtData(d.data_vigencia) + '</dd><dt>Próx. revisão</dt><dd>' + fmtData(d.proxima_revisao) + '</dd><dt>Unidade</dt><dd>' + esc(d.unidade || 'Matriz') + '</dd></dl>';
-    var ass = opt.sem_assinatura ? '' : '<div class="assin"><div><span class="ln"></span><b>' + esc(d.elaborador || '—') + '</b><small>Elaboração' + (d.data_elaboracao ? ' · ' + fmtData(d.data_elaboracao) : '') + '</small></div><div><span class="ln"></span><b>' + esc(d.revisor || '—') + '</b><small>Revisão' + (d.data_revisao ? ' · ' + fmtData(d.data_revisao) : '') + '</small></div><div><span class="ln"></span><b>' + esc(d.aprovador || '—') + '</b><small>Aprovação' + (d.data_vigencia ? ' · ' + fmtData(d.data_vigencia) : '') + '</small></div></div>';
+    var ass = opt.sem_assinatura ? '' : '<div class="assin">' + bloco(d.elaborador, 'Elaboração', d.data_elaboracao, !!d.data_elaboracao) + bloco(d.revisor, 'Revisão', d.data_revisao, !!d.data_revisao) + bloco(d.aprovador, 'Aprovação', d.data_vigencia, !!d.data_vigencia) + '</div>';
     return '<article class="folha">' + fitaTopo() + fitaBase() +
       '<header class="cab"><img src="img/logo-cda.png" alt="CDA"><div class="cab-t"><b>' + esc(C.nome) + '</b><small>' + esc(C.sub) + '</small></div><span class="cab-d">' + hoje + '</span></header><div class="regua"></div>' +
       '<aside class="lateral"><span class="ponto"></span><div class="fio"></div><span class="ponto"></span>' + '<div class="lat-c">' + ficha + '</div></aside>' +
       '<table class="flow"><thead><tr><td><div class="esp-t"></div></td></tr></thead><tbody><tr><td class="miolo"><h1 class="tit">' + esc(d.titulo || '') + '</h1>' + corpo + ass + '</td></tr></tbody><tfoot><tr><td><div class="esp-b"></div></td></tr></tfoot></table>' +
       '<footer class="rodape"><span><i>☎</i>' + esc(C.fone) + ' · ' + esc(C.whats) + '</span><span><i>✉</i>' + esc(C.email) + '</span><span><i>⌂</i>' + esc(C.endereco) + '</span></footer></article>';
   }
-  window.MD = { md: md, esc: esc, folha: folha, fmtData: fmtData, ST: ST };
+  window.MD = { md: md, esc: esc, folha: folha, fmtData: fmtData, ST: ST, setAssin: setAssin, bloco: bloco, chave: chave, assinaturaDe: function (n) { return ASSIN[chave(n)] || null; } };
 })();

@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [] }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -10,19 +10,30 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-06b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-09a';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null;
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin);
     if (DB.demo && !S.d.docs.length) { await semear(true); }
-    if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return d.origem === 'Biblioteca CDA 10/2026'; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
+    if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
   async function semear(silencioso) {
     var docs = (window.Q2_DOCS || []).map(function (d) { return Object.assign({ unidade: 'Matriz', versao: '1', status: 'rascunho', elaborador: 'Diêgo Padua Silva', data_elaboracao: '2026-11-06' }, d); });
-    await DB.saveDocs(docs);
+    var jaTem = {}; S.d.docs.forEach(function (x) { jaTem[x.codigo + '|' + x.titulo + '|' + (x.unidade || 'Matriz')] = x; });
+    var preservados = 0, mudados = 0, novos = [];
+    for (var i = 0; i < docs.length; i++) {
+      var n = docs[i], ex = jaTem[n.codigo + '|' + n.titulo + '|' + n.unidade];
+      if (!ex) { novos.push(n); continue; }
+      if (ex.status !== 'rascunho') { preservados++; continue; }
+      if ((ex.texto || '') === n.texto) continue;
+      try { await DB.addVersao({ doc_id: ex.id, versao: ex.versao, status: ex.status, texto: ex.texto, autor: 'Sistema', motivo: 'Texto anterior à reescrita de ' + '09/11/2026' }); } catch (e) { }
+      novos.push(Object.assign({}, n, { elaborador: ex.elaborador || n.elaborador, data_elaboracao: ex.data_elaboracao || n.data_elaboracao })); mudados++;
+    }
+    await DB.saveDocs(novos);
+    if (!silencioso) toast('Biblioteca atualizada: ' + novos.length + ' documento(s) novo(s) ou reescrito(s); ' + preservados + ' já em revisão/vigente (texto atual mantido).');
     var resp = REQ.filter(function (r) { return !S.d.resp[r[0]]; }).map(function (r) { return { codigo: r[0], resposta: r[5], constatacao: r[9] || '', futuro: !!r[7], atualizado_por: 'Autoavaliação Unimed (06/11/2026)' }; });
     if (resp.length) await DB.saveRespostas(resp);
-    await carregar(); if (!silencioso) toast('Biblioteca e autoavaliação carregadas.'); if (!silencioso) render();
+    await carregar(); if (!silencioso) render();
   }
   function resp(r) { var x = S.d.resp[r[0]]; return x ? { v: x.resposta, c: x.constatacao || '', f: !!x.futuro } : { v: r[5], c: r[9] || '', f: !!r[7] }; }
   function docPorCod(c) { return S.d.docs.filter(function (d) { return d.codigo === c && d.status !== 'obsoleto'; })[0]; }
@@ -204,9 +215,9 @@
     var R = S.reg, r = S.d.regs.filter(function (x) { return x.id === R.id; })[0]; if (!r) { R.id = null; return pgRegLista(); }
     var lib = r.form && docPorCod(r.form), d = lib ? Object.assign({}, lib, { titulo: lib.titulo }) : { codigo: r.form || 'REG', titulo: r.titulo, versao: '1', status: 'vigente', tipo: 'FR' };
     var o = '<button class="voltar" data-regvolta2>← Voltar à lista</button><div class="barra-doc topo"><h1>' + h(r.form || 'Registro') + '<small>' + h(r.titulo) + (r.dia ? ' · ' + MD.fmtData(r.dia) : '') + '</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>';
-    var corpo = '<p>Registro preenchido no sistema' + (r.usuario ? ' por <b>' + h(r.usuario) + '</b>' : '') + (r.dia ? ' em <b>' + MD.fmtData(r.dia) + '</b>' : '') + (r.unidade ? ' · unidade ' + h(r.unidade) : '') + (r.item ? ' · item ' + h(r.item) : '') + '.</p><div id="reg-corpo">Carregando…</div>';
+    var corpo = '<p>Registro preenchido no sistema' + (r.usuario ? ' por <b>' + h(r.usuario) + '</b>' : '') + (r.dia ? ' em <b>' + MD.fmtData(r.dia) + '</b>' : '') + (r.unidade ? ' · unidade ' + h(r.unidade) : '') + (r.item ? ' · item ' + h(r.item) : '') + '.</p><div id="reg-corpo">Carregando…</div><div class="assin">' + MD.bloco(r.usuario, 'Registrado por', r.dia || (r.criado_em || '').slice(0, 10), true) + '</div>';
     setTimeout(async function () { try { var x = (await DB.registro(r.id)) || r, c = $('reg-corpo'); if (!c) return; var ks = camposVisiveis(x.dados); c.innerHTML = ks.length ? '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>' + ks.map(function (k) { return '<tr><td>' + h(rotuloCampo(k)) + '</td><td>' + h(valorCampo(x.dados[k])) + '</td></tr>'; }).join('') + '</tbody></table>' + (x.dados && x.dados._motivo_retificacao ? '<p><b>Retificação:</b> ' + h(x.dados._motivo_retificacao) + '</p>' : '') : '<p>Sem campos preenchidos.</p>'; } catch (e) { var c2 = $('reg-corpo'); if (c2) c2.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; } }, 30);
-    return o + '<div class="fundo-folha">' + MD.folha(Object.assign({}, d, { titulo: r.titulo }), corpo) + '</div>';
+    return o + '<div class="fundo-folha">' + MD.folha(Object.assign({}, d, { titulo: r.titulo }), corpo, { sem_assinatura: true }) + '</div>';
   }
   /* tabela de registros de um formulário num período (relatório de evidência e relatório do período) */
   async function tabelaRegs(chave, de, ate, caixa) {
@@ -686,9 +697,44 @@
   }
 
   /* ---------- ajustes ---------- */
+  function modalAssin(id) {
+    var x = id ? S.d.assin.filter(function (y) { return String(y.id) === String(id); })[0] : null; x = x || {};
+    var cur = x.imagem || '';
+    modal('<h3>' + (x.id ? 'Editar' : 'Cadastrar') + ' assinatura</h3><label class="cmp"><span>Nome (igual ao que aparece nos documentos e no cadastro de usuário)</span><input id="as-n" value="' + h(x.nome || '') + '"></label><div class="hj-campos"><label class="cmp"><span>Cargo</span><input id="as-c" value="' + h(x.cargo || '') + '"></label><label class="cmp"><span>Registro no conselho (opcional)</span><input id="as-r" value="' + h(x.registro || '') + '" placeholder="CRBM / CRF / CRM nº"></label></div>' +
+      '<label class="cmp"><span>Imagem da assinatura (foto ou digitalização)</span><input type="file" id="as-f" accept="image/*"></label><label class="hj-ck"><input type="checkbox" id="as-b" checked> Remover o fundo branco da imagem</label>' +
+      '<div class="cmp"><span>Ou desenhe a assinatura aqui</span><canvas id="as-pad" width="500" height="160" class="as-pad"></canvas><button type="button" class="btn s" id="as-lp" style="margin-top:6px">Limpar desenho</button></div>' +
+      '<div class="as-prev" id="as-prev">' + (cur ? '<img src="' + h(cur) + '" alt="">' : '<small>Sem imagem</small>') + '</div><div class="bt"><button class="btn s" data-x>Cancelar</button><button class="btn" id="as-ok">Salvar</button></div>', function (o) {
+      var pad = $('as-pad'), cx = pad.getContext('2d'), des = false, tinha = false;
+      function prev() { $('as-prev').innerHTML = cur ? '<img src="' + h(cur) + '" alt="">' : '<small>Sem imagem</small>'; }
+      cx.lineWidth = 2.2; cx.lineCap = 'round'; cx.strokeStyle = '#0b1f3a';
+      function pos(e) { var r = pad.getBoundingClientRect(); return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height]; }
+      pad.addEventListener('pointerdown', function (e) { des = true; tinha = true; var p = pos(e); cx.beginPath(); cx.moveTo(p[0], p[1]); pad.setPointerCapture(e.pointerId); e.preventDefault(); });
+      pad.addEventListener('pointermove', function (e) { if (!des) return; var p = pos(e); cx.lineTo(p[0], p[1]); cx.stroke(); });
+      pad.addEventListener('pointerup', function () { if (!des) return; des = false; if (tinha) { cur = pad.toDataURL('image/png'); prev(); } });
+      $('as-lp').onclick = function () { cx.clearRect(0, 0, pad.width, pad.height); tinha = false; };
+      $('as-f').onchange = function () {
+        var f = this.files[0]; if (!f) return; var fr = new FileReader();
+        fr.onload = function () {
+          var im = new Image(); im.onload = function () {
+            var esc = Math.min(1, 500 / im.width, 180 / im.height), w = Math.max(1, Math.round(im.width * esc)), hh = Math.max(1, Math.round(im.height * esc)), c = document.createElement('canvas'); c.width = w; c.height = hh;
+            var g = c.getContext('2d'); g.drawImage(im, 0, 0, w, hh);
+            if ($('as-b').checked) { var id2 = g.getImageData(0, 0, w, hh), px = id2.data; for (var i = 0; i < px.length; i += 4) { var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; if (lum > 225) px[i + 3] = 0; else if (lum > 170) px[i + 3] = Math.round(255 * (225 - lum) / 55); } g.putImageData(id2, 0, 0); }
+            cur = c.toDataURL('image/png'); prev();
+          }; im.src = fr.result;
+        }; fr.readAsDataURL(f);
+      };
+      $('as-ok').onclick = async function () {
+        var n = $('as-n').value.trim(); if (!n) return toast('Informe o nome.', 1); if (!cur) return toast('Envie uma imagem ou desenhe a assinatura.', 1);
+        try { await DB.saveAssinatura({ id: x.id, nome: n, cargo: $('as-c').value.trim(), registro: $('as-r').value.trim(), imagem: cur, ativo: true, atualizado_por: DB.user.nome }); DB.log('assinatura', n); o.fechar(); await carregar(); render(); toast('Assinatura salva.'); } catch (er) { toast(er.message, 1); }
+      };
+    });
+  }
   function pgAjustes() {
     var o = topo('Ajustes', 'Usuários, dados e informações do sistema');
     o += '<div class="vidro pad"><h2 class="sec" style="margin-top:0">Sobre</h2><p style="margin:0;color:var(--mut)">' + (DB.demo ? '<b style="color:#b45309">Modo demonstração:</b> os dados ficam só neste navegador. Para usar com a equipe, configure a chave do Supabase em <code>js/config.js</code> e rode <code>sql/01_base.sql</code>.' : 'Conectado ao Supabase. Dados compartilhados com toda a equipe.') + '</p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn s" data-semear>Carregar/atualizar biblioteca e autoavaliação</button>' + (DB.demo ? '<button class="btn v" data-resetdemo>Apagar dados de demonstração</button>' : '') + '</div></div>';
+    o += '<h2 class="sec">Assinaturas</h2><div class="vidro pad"><p style="margin:0 0 12px;color:var(--mut);font-size:.84rem">A assinatura cadastrada aparece nos documentos (elaboração, revisão e aprovação) e nos formulários preenchidos pela pessoa. Só aparece quando a etapa foi concluída.</p>' +
+      (S.d.assin.length ? '<table><thead><tr><th>Assinatura</th><th>Nome</th><th>Cargo</th><th>Registro</th><th></th></tr></thead><tbody>' + S.d.assin.map(function (x) { return '<tr><td>' + (x.imagem ? '<img class="sig-mini" src="' + h(x.imagem) + '" alt="">' : '—') + '</td><td><b>' + h(x.nome) + '</b></td><td>' + h(x.cargo || '') + '</td><td>' + h(x.registro || '') + '</td><td>' + (DB.pode('aprovar') ? '<button class="btn s" data-assedit="' + h(x.id) + '">Editar</button> <button class="btn s v" data-assdel="' + h(x.id) + '">Remover</button>' : '') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="vazio">Nenhuma assinatura cadastrada ainda.</div>') +
+      (DB.pode('aprovar') ? '<div class="bt" style="margin-top:12px"><button class="btn" data-assnova>＋ Cadastrar assinatura</button></div>' : '') + '</div>';
     if (DB.pode('admin')) o += '<h2 class="sec">Usuários</h2><div class="vidro pad" id="usu-box"><div class="vazio">Carregando…</div></div>';
     if (DB.pode('admin')) setTimeout(carregaUsu, 30); return o;
   }
@@ -755,6 +801,9 @@
     if (t.closest('[data-menu]')) return $('side').classList.toggle('aberto');
     if (t.closest('[data-sair]')) { await DB.logout(); return location.reload(); }
     if (t.closest('[data-semear]')) { try { await semear(false); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-assnova]')) return modalAssin();
+    if ((a = t.closest('[data-assedit]'))) return modalAssin(a.dataset.assedit);
+    if ((a = t.closest('[data-assdel]'))) { if (confirm('Remover esta assinatura? Os documentos deixam de exibi-la.')) { try { await DB.delAssinatura(a.dataset.assdel); await carregar(); render(); toast('Assinatura removida.'); } catch (er) { toast(er.message, 1); } } return; }
     if (t.closest('[data-resetdemo]')) { if (confirm('Apagar todos os dados de demonstração deste navegador?')) { DB.resetDemo(); location.reload(); } return; }
     if ((a = t.closest('[data-set]'))) return setResp(a.dataset.set, a.dataset.r, false);
     if ((a = t.closest('[data-fut]'))) { var rr = REQ.filter(function (x) { return x[0] === a.dataset.fut; })[0]; return setResp(a.dataset.fut, null, !resp(rr).f); }

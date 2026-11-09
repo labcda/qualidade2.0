@@ -187,6 +187,21 @@
     },
 
     /* ----- usuários ----- */
+    /* ----- assinaturas cadastradas (Ajustes) ----- */
+    async assinaturas() {
+      if (demo) return banco().assin || [];
+      try { return await q(sb.from('q2_assinaturas').select('*').order('nome')); } catch (e) { console.warn('[assinaturas]', e.message || e); return []; }
+    },
+    async saveAssinatura(a) {
+      a.atualizado_em = new Date().toISOString();
+      if (demo) { var b = banco(); b.assin = b.assin || []; var i = b.assin.findIndex(function (x) { return String(x.id) === String(a.id) || x.nome === a.nome; }); if (i < 0) { a.id = a.id || uid(); b.assin.push(a); } else b.assin[i] = Object.assign(b.assin[i], a); sv(b); return a; }
+      var row = Object.assign({}, a); if (!row.id) delete row.id;
+      return q(sb.from('q2_assinaturas').upsert(row, { onConflict: 'nome' }).select().single());
+    },
+    async delAssinatura(id) {
+      if (demo) { var b = banco(); b.assin = (b.assin || []).filter(function (x) { return String(x.id) !== String(id); }); sv(b); return; }
+      return q(sb.from('q2_assinaturas').delete().eq('id', id));
+    },
     async perfis() { if (demo) return ok([{ id: 'demo', nome: st.user.nome, email: 'demo@local', papel: st.user.papel, ativo: true }]); return q(sb.from('q2_perfis').select('*').order('nome')); },
     async savePerfil(p) { if (demo) return p; return q(sb.from('q2_perfis').update({ nome: p.nome, papel: p.papel, ativo: p.ativo }).eq('id', p.id)); },
     async log(acao, detalhe) { try { if (demo) return; await sb.from('q2_log').insert({ usuario: st.user ? st.user.nome : '', acao: acao, detalhe: detalhe || '' }); } catch (e) { } },
