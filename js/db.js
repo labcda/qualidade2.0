@@ -138,6 +138,20 @@
       return q(f.order('dia').limit(5000));
     },
 
+    /* ----- tolerância por analito ----- */
+    async tolerancias() {
+      var padrao = [['glicose', 'Glicose', 8, 6, 'mg/dL'], ['colesterol', 'Colesterol', 10, null, ''], ['triglicerideos', 'Triglicerídeos', 15, null, ''], ['acido urico', 'Ácido úrico', 10, null, ''], ['creatinina', 'Creatinina', 10, 0.2, 'mg/dL'], ['tgo', 'TGO', 15, 6, 'U/L'], ['tgp', 'TGP', 15, 6, 'U/L'], ['bilirrubina total', 'Bilirrubina total', 20, 0.4, 'mg/dL'], ['gama gt', 'Gama GT', 15, 5, 'U/L']];
+      if (demo) { var b = banco(); if (!b.tol) { b.tol = padrao.map(function (p) { return { chave: p[0], analito: p[1], percentual: p[2], absoluto: p[3], unidade: p[4], fonte: 'CLIA 2024 · conferir com o RT', atualizado_por: 'valor inicial' }; }); sv(b); } return b.tol; }
+      try { return await q(sb.from('q2_tolerancias').select('*')); } catch (e) { console.warn('[tolerancias]', e.message || e); return []; }
+    },
+    async saveTolerancia(t) {
+      if (demo) { var b = banco(); b.tol = b.tol || []; var i = b.tol.findIndex(function (x) { return x.chave === t.chave; }); if (i < 0) b.tol.push(t); else b.tol[i] = t; sv(b); return t; }
+      return q(sb.from('q2_tolerancias').upsert(t, { onConflict: 'chave' }));
+    },
+    async delTolerancia(chave) {
+      if (demo) { var b = banco(); b.tol = (b.tol || []).filter(function (x) { return x.chave !== chave; }); sv(b); return; }
+      return q(sb.from('q2_tolerancias').delete().eq('chave', chave));
+    },
     async controleAnalitico() {
       if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'ControleAnalitico'; });
       return q(sb.from('q2_registros').select('id,dia,item,dados').eq('origem', 'ControleAnalitico').order('dia', { ascending: false }).limit(8000));

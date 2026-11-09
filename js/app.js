@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [] }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {} }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-06b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || [];
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; });
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return d.origem === 'Biblioteca CDA 10/2026'; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -289,60 +289,66 @@
     });
   }
 
-  /* ---------- controle analítico: variação dos resultados ---------- */
+  /* ---------- controle analítico: variação dos resultados e tolerância por analito ---------- */
   var CQ_NOMES = { HEMA_REPET: 'Hematologia · reanálise do dia anterior', HEMA_APOIO: 'Hematologia · apoio', BIOQ_APOIO: 'Bioquímica · apoio' };
-  function cqLinhas(lista) {
-    return lista.map(function (r) { var d = r.dados || {}; return { id: r.id, dia: r.dia || d.data || '', amostra: d.amostra || '', analito: d.analito || r.item || '', equipamento: d.equipamento || '', apoio: d.lab_apoio || '', tipo: d.tipo || '', ref: numBR(d.valor_ref), med: numBR(d.valor_medido), v: numBR(d.variacao_pct), tol: numBR(d.tolerancia_pct) || CQ_TOL, situacao: d.situacao || '', anulado: d.anulado === 'sim', acao: d.acao_corretiva || '' }; })
-      .filter(function (r) { return !r.anulado; });
-  }
-  function fmtN(n) { return isNaN(n) ? '' : String(Math.round(n * 100) / 100).replace('.', ','); }
   var CORES_CQ = ['#0e9aa7', '#7c3aed', '#d97706', '#2563eb', '#db2777', '#059669', '#9333ea', '#ea580c', '#0891b2', '#65a30d', '#be123c', '#475569', '#ca8a04', '#4f46e5'];
-  function svgVariacao(l, multi) {
-    if (!multi) return svgVariacaoUm(l);
+  function chaveAn(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); }
+  function fmtN(n) { return isNaN(n) ? '' : String(Math.round(n * 100) / 100).replace('.', ','); }
+  /* limite de cada analito: percentual e/ou valor absoluto (vale o que for MAIOR). Sem cadastro: ±10%. */
+  function tolDe(an) {
+    var t = (S.d.tol || {})[chaveAn(an)];
+    if (!t) return { pct: CQ_TOL, abs: null, unidade: '', fonte: '', definido: false };
+    var a = t.absoluto === null || t.absoluto === undefined || t.absoluto === '' ? null : Number(t.absoluto);
+    return { pct: Number(t.percentual) || CQ_TOL, abs: isNaN(a) ? null : a, unidade: t.unidade || '', fonte: t.fonte || '', definido: true };
+  }
+  function limiteTxt(t) { return '±' + fmtN(t.pct) + '%' + (t.abs !== null ? ' ou ' + fmtN(t.abs) + (t.unidade ? ' ' + t.unidade : '') : ''); }
+  function foraDe(an, ref, med, v) { var t = tolDe(an); return !(Math.abs(v) <= t.pct || (t.abs !== null && Math.abs(med - ref) <= t.abs)); }
+  function cqLinhas(lista) {
+    return lista.map(function (r) {
+      var d = r.dados || {}, an = d.analito || r.item || '', ref = numBR(d.valor_ref), med = numBR(d.valor_medido), v = numBR(d.variacao_pct), t = tolDe(an);
+      return { id: r.id, dia: r.dia || d.data || '', amostra: d.amostra || '', analito: an, equipamento: d.equipamento || '', apoio: d.lab_apoio || '', tipo: d.tipo || '', ref: ref, med: med, v: v, tol: t.pct, lim: limiteTxt(t), fora: isNaN(v) ? false : foraDe(an, ref, med, v), anulado: d.anulado === 'sim', acao: d.acao_corretiva || '' };
+    }).filter(function (r) { return !r.anulado; });
+  }
+  /* gráfico: modo 'um' (um analito, eixo em %), 'grupo' (várias linhas) ou 'todos' (pontos); em 'grupo' e 'todos' o eixo é "% do limite" (100 = limite de cada analito) */
+  function svgVariacao(l, modo) {
     l = l.filter(function (r) { return !isNaN(r.v) && r.dia; }).sort(function (a, b) { return a.dia < b.dia ? -1 : 1; }); if (!l.length) return '';
-    var W = 720, H = 230, pl = 40, pr = 12, pt = 12, pb = 26, t0 = Date.parse(l[0].dia), t1 = Date.parse(l[l.length - 1].dia), tol = l[0].tol || CQ_TOL, M = Math.max(30, Math.ceil(tol * 3)), nomes = [];
+    var norm = modo !== 'um', W = 720, H = modo === 'grupo' ? 230 : 200, pl = 44, pr = 12, pt = 12, pb = 26, t0 = Date.parse(l[0].dia), t1 = Date.parse(l[l.length - 1].dia), band = norm ? 100 : l[0].tol, M = norm ? 300 : Math.max(30, Math.ceil(band * 3)), nomes = [];
     l.forEach(function (r) { if (nomes.indexOf(r.analito) < 0) nomes.push(r.analito); });
     function xs(d) { return pl + (t1 === t0 ? (W - pl - pr) / 2 : (Date.parse(d) - t0) / (t1 - t0) * (W - pl - pr)); }
+    function yv(r) { return norm ? (r.tol ? r.v / r.tol * 100 : r.v) : r.v; }
     function ys(v) { return pt + (M - Math.max(-M, Math.min(M, v))) / (2 * M) * (H - pt - pb); }
-    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-width:100%" role="img" aria-label="Variação de todos os analitos ao longo do tempo"><rect x="' + pl + '" y="' + ys(tol) + '" width="' + (W - pl - pr) + '" height="' + (ys(-tol) - ys(tol)) + '" fill="rgba(22,163,74,.12)"/>';
-    [[tol, '+' + tol + '%'], [0, '0'], [-tol, '-' + tol + '%']].forEach(function (g) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(g[0]) + '" y2="' + ys(g[0]) + '" stroke="' + (g[0] === 0 ? '#94a3b8' : '#16a34a') + '" stroke-dasharray="' + (g[0] === 0 ? '0' : '4 3') + '" stroke-width=".8"/><text x="' + (pl - 6) + '" y="' + (ys(g[0]) + 3) + '" font-size="10" text-anchor="end" fill="#64748b">' + g[1] + '</text>'; });
-    nomes.forEach(function (n, k) {
-      var cor = CORES_CQ[k % CORES_CQ.length], pts = l.filter(function (r) { return r.analito === n; });
-      s += '<polyline fill="none" stroke="' + cor + '" stroke-width="1.3" stroke-opacity=".75" points="' + pts.map(function (r) { return xs(r.dia).toFixed(1) + ',' + ys(r.v).toFixed(1); }).join(' ') + '"/>';
-      pts.forEach(function (r) { var fora = Math.abs(r.v) > r.tol; s += '<circle cx="' + xs(r.dia).toFixed(1) + '" cy="' + ys(r.v).toFixed(1) + '" r="' + (fora ? 4 : 3) + '" fill="' + cor + '"' + (fora ? ' stroke="#dc2626" stroke-width="2"' : '') + '><title>' + h(r.analito + ' · ' + MD.fmtData(r.dia) + ' · ' + fmtN(r.v) + '%') + '</title></circle>'; });
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-width:100%" role="img" aria-label="Variação dos resultados ao longo do tempo"><rect x="' + pl + '" y="' + ys(band) + '" width="' + (W - pl - pr) + '" height="' + (ys(-band) - ys(band)) + '" fill="rgba(22,163,74,.13)"/>';
+    [[band, '+' + fmtN(band) + '%'], [0, '0'], [-band, '-' + fmtN(band) + '%']].forEach(function (g) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(g[0]) + '" y2="' + ys(g[0]) + '" stroke="' + (g[0] === 0 ? '#94a3b8' : '#16a34a') + '" stroke-dasharray="' + (g[0] === 0 ? '0' : '4 3') + '" stroke-width=".8"/><text x="' + (pl - 6) + '" y="' + (ys(g[0]) + 3) + '" font-size="10" text-anchor="end" fill="#64748b">' + g[1] + '</text>'; });
+    if (modo === 'grupo') nomes.forEach(function (n, k) { var pts = l.filter(function (r) { return r.analito === n; }); s += '<polyline fill="none" stroke="' + CORES_CQ[k % CORES_CQ.length] + '" stroke-width="1.3" stroke-opacity=".75" points="' + pts.map(function (r) { return xs(r.dia).toFixed(1) + ',' + ys(yv(r)).toFixed(1); }).join(' ') + '"/>'; });
+    l.forEach(function (r) {
+      var cor = modo === 'grupo' ? CORES_CQ[nomes.indexOf(r.analito) % CORES_CQ.length] : (r.fora ? '#dc2626' : '#16a34a');
+      s += '<circle cx="' + xs(r.dia).toFixed(1) + '" cy="' + ys(yv(r)).toFixed(1) + '" r="' + (r.fora ? 4 : 3.2) + '" fill="' + cor + '" fill-opacity=".85"' + (modo === 'grupo' && r.fora ? ' stroke="#dc2626" stroke-width="2"' : '') + '><title>' + h(r.analito + ' · ' + MD.fmtData(r.dia) + ' · ' + fmtN(r.v) + '% (limite ' + r.lim + ')') + '</title></circle>';
     });
     s += '<text x="' + pl + '" y="' + (H - 8) + '" font-size="10" fill="#64748b">' + MD.fmtData(l[0].dia) + '</text><text x="' + (W - pr) + '" y="' + (H - 8) + '" font-size="10" text-anchor="end" fill="#64748b">' + MD.fmtData(l[l.length - 1].dia) + '</text></svg>';
-    return s + '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:.78rem">' + nomes.map(function (n, k) { return '<span style="display:inline-flex;align-items:center;gap:5px"><i style="width:14px;height:4px;border-radius:2px;background:' + CORES_CQ[k % CORES_CQ.length] + '"></i>' + h(n) + '</span>'; }).join('') + '<span style="color:#dc2626">● contorno vermelho = fora da tolerância</span></div>';
-  }
-  function svgVariacaoUm(l) {
-    l = l.filter(function (r) { return !isNaN(r.v) && r.dia; }).sort(function (a, b) { return a.dia < b.dia ? -1 : 1; }); if (!l.length) return '';
-    var W = 720, H = 200, pl = 40, pr = 12, pt = 12, pb = 26, t0 = Date.parse(l[0].dia), t1 = Date.parse(l[l.length - 1].dia), tol = l[0].tol || CQ_TOL, M = Math.max(30, Math.ceil(tol * 3));
-    function xs(d) { return pl + (t1 === t0 ? (W - pl - pr) / 2 : (Date.parse(d) - t0) / (t1 - t0) * (W - pl - pr)); }
-    function ys(v) { return pt + (M - Math.max(-M, Math.min(M, v))) / (2 * M) * (H - pt - pb); }
-    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-width:100%" role="img" aria-label="Variação dos resultados ao longo do tempo"><rect x="' + pl + '" y="' + ys(tol) + '" width="' + (W - pl - pr) + '" height="' + (ys(-tol) - ys(tol)) + '" fill="rgba(22,163,74,.13)"/>';
-    [[tol, '+' + tol + '%'], [0, '0'], [-tol, '-' + tol + '%']].forEach(function (g) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(g[0]) + '" y2="' + ys(g[0]) + '" stroke="' + (g[0] === 0 ? '#94a3b8' : '#16a34a') + '" stroke-dasharray="' + (g[0] === 0 ? '0' : '4 3') + '" stroke-width=".8"/><text x="' + (pl - 6) + '" y="' + (ys(g[0]) + 3) + '" font-size="10" text-anchor="end" fill="#64748b">' + g[1] + '</text>'; });
-    l.forEach(function (r) { var fora = Math.abs(r.v) > r.tol; s += '<circle cx="' + xs(r.dia).toFixed(1) + '" cy="' + ys(r.v).toFixed(1) + '" r="3.4" fill="' + (fora ? '#dc2626' : '#16a34a') + '" fill-opacity=".8"><title>' + h(r.analito + ' · ' + MD.fmtData(r.dia) + ' · ' + fmtN(r.v) + '%') + '</title></circle>'; });
-    s += '<text x="' + pl + '" y="' + (H - 8) + '" font-size="10" fill="#64748b">' + MD.fmtData(l[0].dia) + '</text><text x="' + (W - pr) + '" y="' + (H - 8) + '" font-size="10" text-anchor="end" fill="#64748b">' + MD.fmtData(l[l.length - 1].dia) + '</text></svg>';
+    if (norm) s += '<div style="color:#64748b;font-size:.74rem;margin-top:2px">O eixo mostra a variação como porcentagem do limite de cada analito: 100% é o limite dele (as tolerâncias são diferentes).</div>';
+    if (modo === 'grupo') s += '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:.78rem">' + nomes.map(function (n, k) { return '<span style="display:inline-flex;align-items:center;gap:5px"><i style="width:14px;height:4px;border-radius:2px;background:' + CORES_CQ[k % CORES_CQ.length] + '"></i>' + h(n) + '</span>'; }).join('') + '<span style="color:#dc2626">● contorno vermelho = fora do limite</span></div>';
     return s;
   }
   function cqResumo(l) {
-    var n = l.length, fora = l.filter(function (r) { return Math.abs(r.v) > r.tol; }).length, mx = l.reduce(function (m, r) { return isNaN(r.v) ? m : Math.max(m, Math.abs(r.v)); }, 0);
+    var n = l.length, fora = l.filter(function (r) { return r.fora; }).length, mx = l.reduce(function (m, r) { return isNaN(r.v) ? m : Math.max(m, Math.abs(r.v)); }, 0);
     return { n: n, fora: fora, ok: n - fora, pct: n ? Math.round((n - fora) / n * 1000) / 10 : 0, max: mx };
   }
   function cqTabela(l, limite) {
     var ord = l.slice().sort(function (a, b) { return a.dia < b.dia ? 1 : a.dia > b.dia ? -1 : 0; });
-    return '<table class="tbl"><thead><tr><th>Data</th><th>Amostra</th><th>Analito</th><th>Equipamento</th><th>Apoio</th><th>Referência</th><th>Medido</th><th>Variação</th><th>Situação</th></tr></thead><tbody>' +
-      ord.slice(0, limite || 400).map(function (r) { var fora = Math.abs(r.v) > r.tol; return '<tr><td>' + (r.dia ? MD.fmtData(r.dia) : '') + '</td><td>' + h(r.amostra) + '</td><td>' + h(r.analito) + '</td><td>' + h(r.equipamento) + '</td><td>' + h(r.apoio) + '</td><td>' + fmtN(r.ref) + '</td><td>' + fmtN(r.med) + '</td><td><b style="color:' + (fora ? '#dc2626' : '#15803d') + '">' + (r.v > 0 ? '+' : '') + fmtN(r.v) + '%</b></td><td>' + (fora ? '<b style="color:#dc2626">FORA</b>' : 'OK') + (fora && r.acao ? '<br><small>' + h(r.acao) + '</small>' : '') + '</td></tr>'; }).join('') +
+    return '<table class="tbl"><thead><tr><th>Data</th><th>Amostra</th><th>Analito</th><th>Equipamento</th><th>Apoio</th><th>Referência</th><th>Medido</th><th>Variação</th><th>Limite</th><th>Situação</th></tr></thead><tbody>' +
+      ord.slice(0, limite || 400).map(function (r) { return '<tr><td>' + (r.dia ? MD.fmtData(r.dia) : '') + '</td><td>' + h(r.amostra) + '</td><td>' + h(r.analito) + '</td><td>' + h(r.equipamento) + '</td><td>' + h(r.apoio) + '</td><td>' + fmtN(r.ref) + '</td><td>' + fmtN(r.med) + '</td><td><b style="color:' + (r.fora ? '#dc2626' : '#15803d') + '">' + (r.v > 0 ? '+' : '') + fmtN(r.v) + '%</b></td><td>' + h(r.lim) + '</td><td>' + (r.fora ? '<b style="color:#dc2626">FORA</b>' : 'OK') + (r.fora && r.acao ? '<br><small>' + h(r.acao) + '</small>' : '') + '</td></tr>'; }).join('') +
       '</tbody></table>' + (ord.length > (limite || 400) ? '<p style="color:var(--mut)">Mostrando ' + (limite || 400) + ' de ' + ord.length + '. Use os filtros para ver os demais.</p>' : '');
   }
   function cqFiltrar(todos) {
     var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false }), de = F.per ? somaDias(hoje(), -F.per) : '';
     return todos.filter(function (r) { var grupo = F.analito === '__HEMA__' ? r.tipo.indexOf('HEMA') === 0 : (F.analito === '__BIOQ__' ? r.tipo.indexOf('BIOQ') === 0 : true); return (!F.tipo || r.tipo === F.tipo) && (!F.analito || /^__/.test(F.analito) ? grupo : r.analito === F.analito) && (!de || r.dia >= de); });
   }
+  function modoGraf(F) { return F.analito && !/^__/.test(F.analito) ? 'um' : (/^__/.test(F.analito || '') ? 'grupo' : 'todos'); }
   function pgCq() {
-    var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false });
+    var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false, tol: false });
+    if (F.tol) return pgTol();
     var o = F.rel ? '<button class="voltar" data-cqvolta>← Voltar</button><div class="barra-doc topo"><h1>Relatório de controle analítico<small>Variação dos resultados</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>'
-      : topo('Controle analítico', 'Variação dos resultados: CDA × apoio e reanálise', '<button class="btn" data-cqrel>🖨 Relatório</button>');
+      : topo('Controle analítico', 'Variação dos resultados: CDA × apoio e reanálise', '<button class="btn s" data-cqtol>⚖ Tolerância por analito</button><button class="btn" data-cqrel>🖨 Relatório</button>');
     o += '<div id="cq-box"><div class="vazio">Carregando…</div></div>';
     setTimeout(carregaCq, 20); return o;
   }
@@ -352,17 +358,47 @@
       var todos = cqLinhas(await DB.controleAnalitico()), F = S.cq; box = $('cq-box'); if (!box) return;
       var analitos = []; todos.forEach(function (r) { if (r.analito && analitos.indexOf(r.analito) < 0) analitos.push(r.analito); }); analitos.sort();
       var l = cqFiltrar(todos), rs = cqResumo(l);
-      var corpo = '<div class="grade g4" style="margin-bottom:14px">' + [['Comparações', rs.n, '#0e9aa7'], ['Dentro de ±' + CQ_TOL + '%', rs.ok + ' (' + fmtN(rs.pct) + '%)', '#16a34a'], ['Fora da tolerância', rs.fora, rs.fora ? '#dc2626' : '#64748b'], ['Maior variação', fmtN(rs.max) + '%', '#d97706']].map(function (c) { return '<div class="vidro pad" style="border-left:5px solid ' + c[2] + '"><div style="font-size:1.5rem;font-weight:800;color:' + c[2] + '">' + c[1] + '</div><div style="color:var(--mut);font-size:.78rem;font-weight:700">' + c[0] + '</div></div>'; }).join('') + '</div>';
+      var corpo = '<div class="grade g4" style="margin-bottom:14px">' + [['Comparações', rs.n, '#0e9aa7'], ['Dentro do limite', rs.ok + ' (' + fmtN(rs.pct) + '%)', '#16a34a'], ['Fora do limite', rs.fora, rs.fora ? '#dc2626' : '#64748b'], ['Maior variação', fmtN(rs.max) + '%', '#d97706']].map(function (c) { return '<div class="vidro pad" style="border-left:5px solid ' + c[2] + '"><div style="font-size:1.5rem;font-weight:800;color:' + c[2] + '">' + c[1] + '</div><div style="color:var(--mut);font-size:.78rem;font-weight:700">' + c[0] + '</div></div>'; }).join('') + '</div>';
       if (F.rel) {
-        var tipoTxt = F.tipo ? CQ_NOMES[F.tipo] || F.tipo : 'Todos os tipos', pr = F.per ? 'últimos ' + F.per + ' dias' : 'todo o período';
-        var c = '<p>Variação percentual entre o resultado do CDA e a referência (laboratório de apoio ou reanálise), com tolerância de ±' + CQ_TOL + '%. ' + h(tipoTxt) + (F.analito ? ' · ' + h(F.analito === '__HEMA__' ? 'Hemograma completo' : F.analito === '__BIOQ__' ? 'Bioquímica completa' : F.analito) : '') + ' · ' + pr + '. Emitido em ' + MD.fmtData(hoje()) + ' por ' + h(DB.user ? DB.user.nome : '') + '.</p>' +
-          '<table><thead><tr><th>Comparações</th><th>Dentro de ±' + CQ_TOL + '%</th><th>Fora da tolerância</th><th>Maior variação</th></tr></thead><tbody><tr><td>' + rs.n + '</td><td>' + rs.ok + ' (' + fmtN(rs.pct) + '%)</td><td>' + rs.fora + '</td><td>' + fmtN(rs.max) + '%</td></tr></tbody></table>' + svgVariacao(l, /^__/.test(F.analito)) + cqTabela(l, 600);
+        var tipoTxt = F.tipo ? CQ_NOMES[F.tipo] || F.tipo : 'Todos os tipos', pr = F.per ? 'últimos ' + F.per + ' dias' : 'todo o período', an = [];
+        l.forEach(function (r) { if (an.indexOf(r.analito) < 0) an.push(r.analito); });
+        var lim = '<h2>Limites aplicados</h2><table><thead><tr><th>Analito</th><th>Limite (vale o maior)</th><th>Fonte do critério</th></tr></thead><tbody>' + an.sort().map(function (a) { var t = tolDe(a); return '<tr><td>' + h(a) + '</td><td>' + h(limiteTxt(t)) + '</td><td>' + h(t.definido ? t.fonte || 'definido pelo RT' : 'padrão do sistema (±' + CQ_TOL + '%)') + '</td></tr>'; }).join('') + '</tbody></table>';
+        var c = '<p>Variação percentual entre o resultado do CDA e a referência (laboratório de apoio ou reanálise), avaliada pela tabela de tolerância por analito vigente. ' + h(tipoTxt) + (F.analito ? ' · ' + h(F.analito === '__HEMA__' ? 'Hemograma completo' : F.analito === '__BIOQ__' ? 'Bioquímica completa' : F.analito) : '') + ' · ' + pr + '. Emitido em ' + MD.fmtData(hoje()) + ' por ' + h(DB.user ? DB.user.nome : '') + '.</p>' +
+          '<table><thead><tr><th>Comparações</th><th>Dentro do limite</th><th>Fora do limite</th><th>Maior variação</th></tr></thead><tbody><tr><td>' + rs.n + '</td><td>' + rs.ok + ' (' + fmtN(rs.pct) + '%)</td><td>' + rs.fora + '</td><td>' + fmtN(rs.max) + '%</td></tr></tbody></table>' + lim + svgVariacao(l, modoGraf(F)) + cqTabela(l, 600);
         box.innerHTML = '<div class="fundo-folha">' + MD.folha({ codigo: 'CQ', titulo: 'Controle analítico · variação dos resultados', versao: '1', status: 'vigente', tipo: 'FR' }, c) + '</div>';
         return;
       }
       var filtros = '<div class="barra"><select id="cq-tipo"><option value="">Todos os tipos</option>' + Object.keys(CQ_NOMES).map(function (k) { return '<option value="' + k + '"' + (F.tipo === k ? ' selected' : '') + '>' + CQ_NOMES[k] + '</option>'; }).join('') + '</select><select id="cq-per">' + [[30, 'Últimos 30 dias'], [90, 'Últimos 90 dias'], [180, 'Últimos 180 dias'], [365, 'Últimos 12 meses'], [0, 'Tudo']].map(function (p) { return '<option value="' + p[0] + '"' + (F.per === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select><select id="cq-an"><option value="">Todos os analitos</option>' + (todos.some(function (r) { return r.tipo.indexOf('HEMA') === 0; }) ? '<option value="__HEMA__"' + (F.analito === '__HEMA__' ? ' selected' : '') + '>Hemograma · todos juntos no gráfico</option>' : '') + (todos.some(function (r) { return r.tipo.indexOf('BIOQ') === 0; }) ? '<option value="__BIOQ__"' + (F.analito === '__BIOQ__' ? ' selected' : '') + '>Bioquímica · todos juntos no gráfico</option>' : '') + analitos.map(function (a) { return '<option' + (F.analito === a ? ' selected' : '') + '>' + h(a) + '</option>'; }).join('') + '</select></div>';
-      box.innerHTML = filtros + corpo + (l.length ? '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Variação ao longo do tempo</b><div style="color:var(--mut);font-size:.75rem;margin-bottom:6px">A faixa verde é a tolerância de ±' + CQ_TOL + '%. Pontos vermelhos estão fora.</div>' + svgVariacao(l, /^__/.test(F.analito)) + '</div><div class="vidro pad" style="overflow:auto">' + cqTabela(l) + '</div>' : '<div class="vazio">Nenhum resultado neste filtro.</div>');
+      box.innerHTML = filtros + corpo + (l.length ? '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Variação ao longo do tempo</b><div style="color:var(--mut);font-size:.75rem;margin-bottom:6px">A faixa verde é o limite aceito. Pontos vermelhos estão fora dele.</div>' + svgVariacao(l, modoGraf(F)) + '</div><div class="vidro pad" style="overflow:auto">' + cqTabela(l) + '</div>' : '<div class="vazio">Nenhum resultado neste filtro.</div>');
     } catch (e) { box = $('cq-box'); if (box) box.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; }
+  }
+  /* tabela de tolerância por analito (só admin e RT alteram) */
+  function pgTol() {
+    var o = '<button class="voltar" data-tolvolta>← Voltar ao controle analítico</button>' + topo('Tolerância por analito', 'Limite de variação aceito em cada exame', '');
+    o += '<div class="vidro pad" style="margin-bottom:14px;font-size:.86rem;line-height:1.55"><b>Como funciona.</b> O resultado fica dentro do limite se a variação for menor ou igual ao <b>percentual</b> <i>ou</i> se a diferença for menor ou igual ao <b>valor absoluto</b>: vale o que for <b>maior</b> (como no CLIA). Isso evita marcar como "fora" um resultado de valor baixo com diferença pequena. Analito sem cadastro usa <b>±' + CQ_TOL + '%</b>. ' + (DB.pode('aprovar') ? 'Você pode editar.' : 'Só o administrador e o RT alteram esta tabela.') + '<br><span style="color:var(--mut)">Os valores iniciais vêm do CLIA (2024) e precisam da conferência e aprovação do RT; o campo "Fonte" fica registrado e aparece no relatório.</span></div><div id="tol-box"><div class="vazio">Carregando…</div></div>';
+    setTimeout(carregaTol, 20); return o;
+  }
+  async function carregaTol() {
+    var box = $('tol-box'); if (!box) return;
+    try {
+      var linhas = cqLinhas(await DB.controleAnalitico()), pode = DB.pode('aprovar'), nomes = {}, ts = S.d.tol || {};
+      linhas.forEach(function (r) { if (r.analito) nomes[chaveAn(r.analito)] = r.analito; }); Object.keys(ts).forEach(function (k) { nomes[k] = ts[k].analito || k; });
+      var ch = Object.keys(nomes).sort(function (a, b) { return nomes[a] < nomes[b] ? -1 : 1; }); box = $('tol-box'); if (!box) return;
+      var inp = function (k, campo, v, ph, w) { return pode ? '<input data-tolc="' + h(k) + '" data-tolf="' + campo + '" value="' + h(v === null || v === undefined ? '' : v) + '" placeholder="' + ph + '" style="width:' + w + ';padding:7px 9px;border:1px solid var(--bd);border-radius:9px;font:inherit;font-size:.84rem;background:#fff">' : h(v === null || v === undefined || v === '' ? '—' : v); };
+      box.innerHTML = '<div class="vidro pad" style="overflow:auto"><table class="tbl"><thead><tr><th>Analito</th><th>Variação % (±)</th><th>ou diferença absoluta</th><th>Unidade</th><th>Fonte do critério</th><th>Situação</th>' + (pode ? '<th></th>' : '') + '</tr></thead><tbody>' + ch.map(function (k) {
+        var t = ts[k], def = !!t; return '<tr><td><b>' + h(nomes[k]) + '</b></td><td>' + inp(k, 'percentual', def ? t.percentual : '', String(CQ_TOL), '80px') + '</td><td>' + inp(k, 'absoluto', def ? t.absoluto : '', 'opcional', '90px') + '</td><td>' + inp(k, 'unidade', def ? t.unidade : '', 'mg/dL', '80px') + '</td><td>' + inp(k, 'fonte', def ? t.fonte : '', 'Ex.: CLIA 2024', '210px') + '</td><td>' + (def ? '<span class="selo A">definido</span>' : '<span class="selo P">padrão ±' + CQ_TOL + '%</span>') + (def && t.atualizado_por ? '<br><small style="color:var(--mut)">' + h(t.atualizado_por) + '</small>' : '') + '</td>' + (pode ? '<td style="white-space:nowrap"><button class="btn p s" data-tolsalvar="' + h(k) + '">Salvar</button>' + (def ? ' <button class="btn p v s" data-toldel="' + h(k) + '" title="Volta ao padrão">Padrão</button>' : '') + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>' +
+        (pode ? '<div class="vidro pad" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:.86rem">Adicionar analito</b><input id="tol-novo" placeholder="Nome do analito (como aparece nos resultados)" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;font:inherit;background:#fff"><button class="btn" data-toladd>＋ Adicionar</button></div>' : '');
+    } catch (e) { box = $('tol-box'); if (box) box.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; }
+  }
+  async function salvarTol(k) {
+    var g = function (f) { var el = document.querySelector('[data-tolc="' + k + '"][data-tolf="' + f + '"]'); return el ? el.value.trim() : ''; };
+    var pc = numBR(g('percentual')), ab = g('absoluto'), abn = ab === '' ? null : numBR(ab);
+    if (isNaN(pc) || pc <= 0) throw new Error('Informe a variação percentual (maior que zero).');
+    if (abn !== null && (isNaN(abn) || abn < 0)) throw new Error('Diferença absoluta inválida.');
+    var atual = (S.d.tol || {})[k] || {}, linha = { chave: k, analito: atual.analito || g('analito') || k, percentual: pc, absoluto: abn, unidade: g('unidade'), fonte: g('fonte'), atualizado_por: DB.user.nome, atualizado_em: new Date().toISOString() };
+    if (!atual.analito) { var nm = (document.querySelector('[data-tolc="' + k + '"]').closest('tr').querySelector('b') || {}).textContent; if (nm) linha.analito = nm; }
+    await DB.saveTolerancia(linha); S.d.tol = S.d.tol || {}; S.d.tol[k] = linha; DB.log('tolerancia', linha.analito + ' ' + pc + '%' + (abn !== null ? ' / ' + abn : ''));
+    toast('Tolerância de ' + linha.analito + ' salva.'); carregaTol();
   }
   function varApoio(inp) {
     var id = inp.dataset.apid, i = Number(inp.dataset.api), r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
@@ -371,8 +407,8 @@
     if (!l || isNaN(n) || !inp.value.trim()) { out.textContent = ''; out.className = 'ap-var'; return; }
     var cda = numBR(l.valor_medido), rep = d.tipo === 'HEMA_REPET', ref = rep ? cda : n, med = rep ? n : cda;
     if (!ref) { out.textContent = 'referência zero: sem cálculo'; out.className = 'ap-var fora'; return; }
-    var v = Math.round((med - ref) / ref * 10000) / 100, ok = Math.abs(v) <= CQ_TOL;
-    out.textContent = 'Variação ' + (v > 0 ? '+' : '') + fmtN(v) + '% · ' + (ok ? 'dentro de ±' + CQ_TOL + '%' : 'FORA de ±' + CQ_TOL + '%'); out.className = 'ap-var ' + (ok ? 'ok' : 'fora');
+    var v = Math.round((med - ref) / ref * 10000) / 100, fora = foraDe(x.analito, ref, med, v), t = tolDe(x.analito);
+    out.textContent = 'Variação ' + (v > 0 ? '+' : '') + fmtN(v) + '% · ' + (fora ? 'FORA do limite' : 'dentro do limite') + ' (' + limiteTxt(t) + ')'; out.className = 'ap-var ' + (fora ? 'fora' : 'ok');
   }
 
   /* ---------- O que preencher hoje (formulários de rotina diária) ---------- */
@@ -437,7 +473,7 @@
     }).join('');
     return '<div class="vidro ap-card' + (aberto ? ' aberto' : '') + '" data-apcard="' + r.id + '"><button type="button" class="ap-head" data-apabrir="' + r.id + '"><span class="ap-tt"><b>Amostra ' + h(d.amostra) + '</b><small>' + h(nomeCqLongo(d.tipo)) + ' · coletada em ' + MD.fmtData(d.data) + '</small></span><span class="ap-meta"><span class="selo ' + (esp > 7 ? 'N' : 'P') + '">há ' + esp + ' dia' + (esp === 1 ? '' : 's') + '</span><em>' + rows.length + ' exame' + (rows.length === 1 ? '' : 's') + '</em><i class="ap-seta">▾</i></span></button>' +
       '<div class="ap-corpo">' + (d.status === 'PARCIAL' ? '<p class="ap-obs">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + '<div class="ap-grid">' + (corpo || '<p>Tudo lançado.</p>') + '</div>' +
-      '<label class="cmp" style="margin-top:12px"><span>Ação corretiva (só se algum resultado ficar fora de ±' + CQ_TOL + '%)</span><input data-apacao="' + r.id + '"></label><div class="bt"><button class="btn p v" data-apcancel="' + r.id + '">Cancelar envio</button><button class="btn" data-apsalvar="' + r.id + '">Salvar retorno</button></div></div></div>';
+      '<label class="cmp" style="margin-top:12px"><span>Ação corretiva (só se algum resultado ficar fora do limite do analito)</span><input data-apacao="' + r.id + '"></label><div class="bt"><button class="btn p v" data-apcancel="' + r.id + '">Cancelar envio</button><button class="btn" data-apsalvar="' + r.id + '">Salvar retorno</button></div></div></div>';
   }
   async function salvarApoio(id) {
     var r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
@@ -459,11 +495,11 @@
     novas.forEach(function (n, i) {
       if (isNaN(n.ref) || isNaN(n.med)) throw new Error('Valor inválido em ' + n.analito + '.');
       if (n.ref === 0) throw new Error('O valor de referência de ' + n.analito + ' é zero: não dá para calcular a variação.');
-      var vr = Math.round(((n.med - n.ref) / n.ref * 100) * 100) / 100, ok = Math.abs(vr) <= CQ_TOL; if (!ok) fora.push(n.analito + ': ' + vr + '%');
+      var vr = Math.round(((n.med - n.ref) / n.ref * 100) * 100) / 100, t = tolDe(n.analito), ok = !foraDe(n.analito, n.ref, n.med, vr); if (!ok) fora.push(n.analito + ': ' + vr + '% (limite ' + limiteTxt(t) + ')');
       regs.push({ origem: 'ControleAnalitico', form: '', titulo: 'Controle analítico · ' + nomeTipoCq(d.tipo), unidade: '', periodo: '', dia: d.data, item: n.analito, usuario: DB.user.nome, criado_em: agora,
-        dados: { id: 'CQ' + Date.now().toString(36).toUpperCase() + i, grupo: grupo, tipo: d.tipo, data: d.data, equipamento: n.equipamento, lab_apoio: n.lab_apoio, amostra: d.amostra, analito: n.analito, valor_ref: String(n.ref), valor_medido: String(n.med), variacao_pct: String(vr), tolerancia_pct: String(CQ_TOL), situacao: ok ? 'OK' : 'FORA', usuario: DB.user.nome, acao_corretiva: acao, observacao: 'Retorno do apoio em ' + hoje() + ' (lançamento ' + (d.id || '') + ')' + (naoFeitos.length ? ' - Não realizado pelo apoio: ' + naoFeitos.join(', ') : ''), registrado_em: agora, anulado: '', motivo_anulacao: '' } });
+        dados: { id: 'CQ' + Date.now().toString(36).toUpperCase() + i, grupo: grupo, tipo: d.tipo, data: d.data, equipamento: n.equipamento, lab_apoio: n.lab_apoio, amostra: d.amostra, analito: n.analito, valor_ref: String(n.ref), valor_medido: String(n.med), variacao_pct: String(vr), tolerancia_pct: String(t.pct), tolerancia_abs: t.abs === null ? '' : String(t.abs), situacao: ok ? 'OK' : 'FORA', usuario: DB.user.nome, acao_corretiva: acao, observacao: 'Retorno do apoio em ' + hoje() + ' (lançamento ' + (d.id || '') + ')' + (naoFeitos.length ? ' - Não realizado pelo apoio: ' + naoFeitos.join(', ') : ''), registrado_em: agora, anulado: '', motivo_anulacao: '' } });
     });
-    if (fora.length && !acao) throw new Error('Há ' + fora.length + ' resultado(s) fora de ±' + CQ_TOL + '% (' + fora.join('; ') + '). Descreva a ação corretiva.');
+    if (fora.length && !acao) throw new Error('Há ' + fora.length + ' resultado(s) fora do limite (' + fora.join('; ') + '). Descreva a ação corretiva.');
     if (regs.length) await DB.addRegistros(regs);
     var nf = feito.concat(marca), total = analitosUnicos(cda).length * labs.length, status = nf.length >= total ? 'CONCLUIDO' : 'PARCIAL';
     await DB.updRegistro(r.id, { dados: Object.assign({}, d, { feito_json: JSON.stringify(nf), status: status, atualizado_em: agora }) });
@@ -573,6 +609,11 @@
     if (t.closest('[data-regvolta]')) { S.reg = { chave: '', q: '', mes: '', id: null }; return render(); }
     if (t.closest('[data-regvolta2]')) { S.reg.id = null; S.reg.rel = false; return render(); }
     if (t.closest('[data-regrel]')) { S.reg.rel = true; S.reg.dias = 90; S.reg.id = null; return render(); }
+    if (t.closest('[data-cqtol]')) { S.cq.tol = true; return render(); }
+    if (t.closest('[data-tolvolta]')) { S.cq.tol = false; return render(); }
+    if ((a = t.closest('[data-tolsalvar]'))) { try { await salvarTol(a.dataset.tolsalvar); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-toldel]'))) { try { await DB.delTolerancia(a.dataset.toldel); delete S.d.tol[a.dataset.toldel]; toast('Voltou ao padrão (±' + CQ_TOL + '%).'); carregaTol(); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-toladd]')) { try { var nm = $('tol-novo').value.trim(); if (!nm) throw new Error('Digite o nome do analito.'); var kk = chaveAn(nm), ln = { chave: kk, analito: nm, percentual: CQ_TOL, absoluto: null, unidade: '', fonte: '', atualizado_por: DB.user.nome, atualizado_em: new Date().toISOString() }; await DB.saveTolerancia(ln); S.d.tol[kk] = ln; toast('Analito adicionado. Ajuste os limites e salve.'); carregaTol(); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-cqrel]')) { S.cq.rel = true; return render(); }
     if (t.closest('[data-cqvolta]')) { S.cq.rel = false; return render(); }
     if ((a = t.closest('[data-hjabrir]'))) { a.closest('.hj-it').classList.toggle('aberto'); return; }
