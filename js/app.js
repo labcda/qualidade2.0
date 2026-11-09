@@ -183,7 +183,19 @@
   function nRegs(cod) { return S.d.regs.filter(function (r) { return r.form === cod; }).length; }
   function chaveReg(r) { return r.form || r.titulo; }
   function rotuloCampo(k) { var t = String(k).replace(/^_+/, '').replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
-  function valorCampo(v) { if (v === null || v === undefined) return ''; if (v === true) return 'Sim'; if (v === false) return 'Não'; if (typeof v === 'string' && /^\s*[\[{]/.test(v)) { try { return valorCampo(JSON.parse(v)); } catch (e) { return v; } } if (Array.isArray(v)) return v.map(valorCampo).join('; '); if (typeof v === 'object' && v.s !== undefined && Object.keys(v).length <= 2) return v.s + (v.o ? ' — ' + v.o : ''); if (typeof v === 'object') return Object.keys(v).map(function (k) { return rotuloCampo(k) + ': ' + valorCampo(v[k]); }).join(' · '); return String(v); }
+  function valorCampo(v) { if (v === null || v === undefined) return ''; if (v === true) return 'Sim'; if (v === false) return 'Não'; if (typeof v === 'string' && /^\s*[\[{]/.test(v)) { try { return valorCampo(JSON.parse(v)); } catch (e) { return v; } } if (Array.isArray(v)) return v.map(valorCampo).join('; '); if (typeof v === 'object' && v.s !== undefined && Object.keys(v).length <= 2) return v.s + (v.o ? ' — ' + v.o : ''); if (typeof v === 'object') return Object.keys(v).map(function (k) { return rotuloCampo(k) + ': ' + valorCampo(v[k]); }).join(' · '); if (typeof v === 'string' && /^d{4}-d{2}-d{2}$/.test(v)) return MD.fmtData(v); return String(v); }
+  function valorHtml(v) {
+    if (typeof v === 'string' && /^\s*[\[{]/.test(v)) { try { v = JSON.parse(v); } catch (e) { } }
+    if (Array.isArray(v) && v.length && v.every(function (r) { return r && typeof r === 'object' && !Array.isArray(r) && r.s === undefined; })) {
+      var ks = []; v.forEach(function (r) { Object.keys(r).forEach(function (k) { if (ks.indexOf(k) < 0) ks.push(k); }); });
+      return '<table class="tbl"><thead><tr>' + ks.map(function (k) { return '<th>' + h(k) + '</th>'; }).join('') + '</tr></thead><tbody>' + v.map(function (r) { return '<tr>' + ks.map(function (k) { return '<td>' + h(valorCampo(r[k])) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
+    }
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length && Object.keys(v).every(function (k) { return v[k] && typeof v[k] === 'object' && v[k].s === undefined && !Array.isArray(v[k]); })) {
+      var cs2 = []; Object.keys(v).forEach(function (l) { Object.keys(v[l]).forEach(function (k) { if (cs2.indexOf(k) < 0) cs2.push(k); }); });
+      return '<table class="tbl"><thead><tr><th></th>' + cs2.map(function (k) { return '<th>' + h(k) + '</th>'; }).join('') + '</tr></thead><tbody>' + Object.keys(v).map(function (l) { return '<tr><td><b>' + h(l) + '</b></td>' + cs2.map(function (k) { return '<td>' + h(valorCampo(v[l][k])) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
+    }
+    return h(valorCampo(v));
+  }
   function camposVisiveis(dados) { return Object.keys(dados || {}).filter(function (k) { return k.charAt(0) !== '_' && valorCampo(dados[k]) !== ''; }); }
   function grupoReg() {
     var g = {}; S.d.regs.forEach(function (r) { var k = chaveReg(r), x = g[k] || (g[k] = { chave: k, form: r.form, titulo: r.titulo, n: 0, ultimo: '', usuarios: {} }); x.n++; if (r.dia && r.dia > x.ultimo) x.ultimo = r.dia; if (r.usuario) x.usuarios[r.usuario] = 1; });
@@ -216,8 +228,8 @@
     var lib = r.form && docPorCod(r.form), d = lib ? Object.assign({}, lib, { titulo: lib.titulo }) : { codigo: r.form || 'REG', titulo: r.titulo, versao: '1', status: 'vigente', tipo: 'FR' };
     var o = '<button class="voltar" data-regvolta2>← Voltar à lista</button><div class="barra-doc topo"><h1>' + h(r.form || 'Registro') + '<small>' + h(r.titulo) + (r.dia ? ' · ' + MD.fmtData(r.dia) : '') + '</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>';
     var corpo = '<p>Registro preenchido no sistema' + (r.usuario ? ' por <b>' + h(r.usuario) + '</b>' : '') + (r.dia ? ' em <b>' + MD.fmtData(r.dia) + '</b>' : '') + (r.unidade ? ' · unidade ' + h(r.unidade) : '') + (r.item ? ' · item ' + h(r.item) : '') + '.</p><div id="reg-corpo">Carregando…</div><div class="assin">' + MD.bloco(r.usuario, 'Registrado por', r.dia || (r.criado_em || '').slice(0, 10), true) + '</div>';
-    setTimeout(async function () { try { var x = (await DB.registro(r.id)) || r, c = $('reg-corpo'); if (!c) return; var ks = camposVisiveis(x.dados); c.innerHTML = ks.length ? '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>' + ks.map(function (k) { return '<tr><td>' + h(rotuloCampo(k)) + '</td><td>' + h(valorCampo(x.dados[k])) + '</td></tr>'; }).join('') + '</tbody></table>' + (x.dados && x.dados._motivo_retificacao ? '<p><b>Retificação:</b> ' + h(x.dados._motivo_retificacao) + '</p>' : '') : '<p>Sem campos preenchidos.</p>'; } catch (e) { var c2 = $('reg-corpo'); if (c2) c2.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; } }, 30);
-    return o + '<div class="fundo-folha">' + MD.folha(Object.assign({}, d, { titulo: r.titulo }), corpo, { sem_assinatura: true }) + '</div>';
+    setTimeout(async function () { try { var x = (await DB.registro(r.id)) || r, c = $('reg-corpo'); if (!c) return; var ks = camposVisiveis(x.dados); c.innerHTML = ks.length ? '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>' + ks.map(function (k) { return '<tr><td>' + h(rotuloCampo(k)) + '</td><td>' + valorHtml(x.dados[k]) + '</td></tr>'; }).join('') + '</tbody></table>' + (x.dados && x.dados._motivo_retificacao ? '<p><b>Retificação:</b> ' + h(x.dados._motivo_retificacao) + '</p>' : '') : '<p>Sem campos preenchidos.</p>'; } catch (e) { var c2 = $('reg-corpo'); if (c2) c2.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; } }, 30);
+    return o + '<div class="fundo-folha">' + MD.folha(Object.assign({}, d, { titulo: lib ? lib.titulo : r.titulo }), corpo, { sem_assinatura: true }) + '</div>';
   }
   /* tabela de registros de um formulário num período (relatório de evidência e relatório do período) */
   async function tabelaRegs(chave, de, ate, caixa) {
@@ -467,24 +479,36 @@
   /* ---------- Preencher formulário: todos os FR da Qualidade anterior ---------- */
   function defForm(cod) { return window.Q2_FORMS.filter(function (f) { return f.c === cod; })[0]; }
   function camposDe(f) { return f.modo === 'mensal' ? (f.cols || []) : (f.campos || []); }
-  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }]); }
+  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }, { c: 'FR 001', t: 'Controle de Temperatura de Estocagem de Reagentes e Amostras', cat: 'Temperatura e ambiente', modo: 'temp' }]); }
   function pgForms() {
     var R = S.frm || (S.frm = { cod: '', q: '' });
+    if (R.cod === 'FR 001') { R.cod = ''; S.rdTab = 'temp'; setTimeout(function () { irPara('registros'); }, 0); return '<div class="vazio">Abrindo o registro de temperaturas…</div>'; }
     if (R.cod === 'FIA') { R.cod = ''; S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false }; S.cq.fia = true; return pgFia(); }
     if (R.cod) return pgFormPreencher();
     var q = MD.esc(R.q || '').toLowerCase(), lista = catalogoForms().filter(function (f) { return !q || (f.c + ' ' + f.t + ' ' + f.cat).toLowerCase().indexOf(q) >= 0; }), cats = [];
     lista.forEach(function (f) { if (cats.indexOf(f.cat) < 0) cats.push(f.cat); });
-    var o = topo('Preencher formulário', window.Q2_FORMS.length + 1 + ' formulários e controles', '');
+    var o = topo('Preencher formulário', catalogoForms().length + ' formulários e controles', '');
     o += '<div class="barra"><input id="fm-q" placeholder="Procurar formulário (código ou nome)…" value="' + h(R.q || '') + '"></div>';
     cats.forEach(function (c) {
       o += '<h2 class="sec">' + h(c) + '</h2><div class="cards anim">' + lista.filter(function (f) { return f.cat === c; }).map(function (f) {
         var n = S.d.regs.filter(function (r) { return r.form === f.c; }).length;
-        return '<button class="vidro dc" data-frmabrir="' + h(f.c) + '"><span class="cd">' + h(f.c) + ' · ' + (f.modo === 'mensal' ? 'FOLHA DIÁRIA/MENSAL' : f.modo === 'fia' ? 'SEMANAL' : 'REGISTRO') + '</span><b>' + h(f.t) + '</b><span class="rod"><span>' + (f.modo === 'fia' ? S.d.fia.length : n) + ' registro' + ((f.modo === 'fia' ? S.d.fia.length : n) === 1 ? '' : 's') + '</span></span></button>';
+        return '<button class="vidro dc" data-frmabrir="' + h(f.c) + '"><span class="cd">' + h(f.c) + ' · ' + (f.modo === 'mensal' ? 'FOLHA DIÁRIA/MENSAL' : f.modo === 'fia' ? 'SEMANAL' : f.modo === 'temp' ? 'TEMPERATURAS' : 'REGISTRO') + '</span><b>' + h(f.t) + '</b><span class="rod"><span>' + (f.modo === 'fia' ? S.d.fia.length : n) + ' registro' + ((f.modo === 'fia' ? S.d.fia.length : n) === 1 ? '' : 's') + '</span></span></button>';
       }).join('') + '</div>';
     });
     return o;
   }
+  function celTab(c, v) {
+    var ph = ' data-fvt-k="' + h(c.label) + '"';
+    if (c.tipo === 'select') return '<select' + ph + '><option value="">—</option>' + (c.opcoes || []).map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + h(x) + '</option>'; }).join('') + '</select>';
+    return '<input type="' + (c.tipo === 'data' ? 'date' : 'text') + '"' + ph + ' value="' + h(v || '') + '">';
+  }
+  function linhaTab(c, vals) { return '<tr>' + c.colunas.map(function (k, i) { return '<td>' + celTab(k, vals ? vals[i] : '') + '</td>'; }).join('') + '<td class="fv-x"><button type="button" class="btn s" data-fvdel title="Remover linha">×</button></td></tr>'; }
   function campoHtml(c) {
+    if (c.tipo === 'secao') return '<h4 class="fv-g fv-sec">' + h(c.label) + '</h4>';
+    if (c.tipo === 'tabela') {
+      var lin = (c.linhas || []).map(function (r) { return linhaTab(c, r); }).join('') + new Array(c.n || 0).fill(0).map(function () { return linhaTab(c); }).join('');
+      return '<div class="cmp fv-w" data-fvtab="' + c.id + '"><span>' + h(c.label) + '</span><div style="overflow:auto"><table class="tbl fv-tab"><thead><tr>' + c.colunas.map(function (k) { return '<th>' + h(k.label) + '</th>'; }).join('') + '<th></th></tr></thead><tbody>' + lin + '</tbody></table></div><button type="button" class="btn s" data-fvadd="' + c.id + '" style="margin-top:6px">＋ Adicionar linha</button></div>';
+    }
     var lb = h(c.label) + (c.obrig ? ' <i class="obr">*</i>' : '') + (c.min != null || c.max != null ? ' <i>(' + (c.min != null ? c.min : '') + ' a ' + (c.max != null ? c.max : '') + ')</i>' : '');
     var op = (c.opcoes || []).map(function (x) { return '<option>' + h(x) + '</option>'; }).join('');
     if (c.tipo === 'check') return '<label class="hj-ck"><input type="checkbox" data-fv="' + c.id + '"> ' + h(c.label) + '</label>';
@@ -504,8 +528,10 @@
     o += '<div class="vidro pad">' + (f.aviso ? '<p class="hj-av">' + h(f.aviso) + '</p>' : '') + (f.alerta ? '<p class="hj-av" style="background:#fee2e2;color:#991b1b">' + h(f.alerta.msg) + '</p>' : '');
     o += '<div class="hj-campos" style="margin-bottom:12px"><label class="cmp"><span>Unidade</span><select id="fv-un"><option>Matriz</option><option>Mata Fria</option></select></label>' +
       (mens ? '<label class="cmp"><span>Data</span><input type="date" id="fv-dia" value="' + hoje() + '" max="' + hoje() + '"></label>' + (f.itens && f.itens.length ? '<label class="cmp"><span>' + h(f.item_label || 'Item') + '</span><select id="fv-item">' + f.itens.map(function (x) { return '<option>' + h(x) + '</option>'; }).join('') + '</select></label>' : '') : '') + '</div>';
-    var cs = camposDe(f), curtos = cs.filter(function (c) { return ['check', 'numero', 'texto', 'data', 'hora', 'select'].indexOf(c.tipo) >= 0; }), longos = cs.filter(function (c) { return curtos.indexOf(c) < 0; });
-    o += '<div class="hj-campos">' + curtos.map(campoHtml).join('') + '</div>' + longos.map(campoHtml).join('');
+    var cs = camposDe(f), buf = [];
+    function descarrega() { if (buf.length) { o += '<div class="hj-campos">' + buf.map(campoHtml).join('') + '</div>'; buf = []; } }
+    cs.forEach(function (c) { if (['check', 'numero', 'texto', 'data', 'hora', 'select'].indexOf(c.tipo) >= 0) buf.push(c); else { descarrega(); o += campoHtml(c); } });
+    descarrega();
     o += '<div class="bt" style="margin-top:14px"><button class="btn" data-frmsalvar>Registrar</button></div></div>';
     return o;
   }
@@ -513,6 +539,8 @@
     var cs = camposDe(f), dados = {}, fora = [], erros = [], root = document;
     cs.forEach(function (c) {
       var v;
+      if (c.tipo === 'secao') return;
+      if (c.tipo === 'tabela') { var box = root.querySelector('[data-fvtab="' + c.id + '"]'), rl = []; [].slice.call(box ? box.querySelectorAll('tbody tr') : []).forEach(function (tr) { var o = {}, n = 0; [].slice.call(tr.querySelectorAll('[data-fvt-k]')).forEach(function (el) { var t = el.value.trim(); if (t) { o[el.getAttribute('data-fvt-k')] = t; n++; } }); if (n) rl.push(o); }); if (rl.length) dados[c.id] = rl; else if (c.obrig) erros.push(c.label); return; }
       if (c.tipo === 'check') { dados[c.id] = !!root.querySelector('[data-fv="' + c.id + '"]').checked; return; }
       if (c.tipo === 'multi') { v = [].slice.call(root.querySelectorAll('[data-fvm="' + c.id + '"]:checked')).map(function (x) { return x.value; }); if (v.length) dados[c.id] = v; else if (c.obrig) erros.push(c.label); return; }
       if (c.tipo === 'grade') { var g = {}, n = 0; [].slice.call(root.querySelectorAll('[data-fvg="' + c.id + '"]')).forEach(function (i) { var t = i.value.trim(); if (!t) return; (g[i.dataset.l] = g[i.dataset.l] || {})[i.dataset.k] = t; n++; }); if (n) dados[c.id] = g; else if (c.obrig) erros.push(c.label); return; }
@@ -779,6 +807,8 @@
     if (t.closest('[data-fiasalvar]')) { try { await salvarFia(); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-fiafxsalvar]')) { try { var fx = {}; [].slice.call(document.querySelectorAll('[data-fiafx]')).forEach(function (i) { var n = numBR(i.value); if (isNaN(n)) throw new Error('Faixa inválida.'); fx[i.dataset.fiafx] = n; }); if (fx.c1_min >= fx.c1_max || fx.c2_min >= fx.c2_max) throw new Error('O mínimo precisa ser menor que o máximo.'); fx.unidade = fiaFx().unidade; await DB.saveFiaFaixas(fx); S.d.fiaFx = Object.assign({ id: 1 }, fx); toast('Faixas salvas.'); render(); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-frmabrir]'))) { S.frm = { cod: a.dataset.frmabrir, q: '' }; return render(); }
+    if ((a = t.closest('[data-fvadd]'))) { var fdef = defForm(S.frm.cod), cd = fdef && camposDe(fdef).filter(function (c) { return c.id === a.dataset.fvadd; })[0]; if (cd) { var tb = document.querySelector('[data-fvtab="' + cd.id + '"] tbody'); tb.insertAdjacentHTML('beforeend', linhaTab(cd)); } return; }
+    if ((a = t.closest('[data-fvdel]'))) { var trr = a.closest('tr'); if (trr) trr.remove(); return; }
     if (t.closest('[data-frmvolta]')) { S.frm = { cod: '', q: '' }; return render(); }
     if (t.closest('[data-frmsalvar]')) { try { await salvarForm(); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-cqtol]')) { S.cq.tol = true; return render(); }
