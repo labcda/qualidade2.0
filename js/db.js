@@ -187,6 +187,24 @@
     },
 
     /* ----- usuários ----- */
+    /* ----- indicadores (definições, metas e valores mensais) ----- */
+    async indicadores() {
+      if (demo) { var b = banco(); if (!b.indDef) { b.indDef = JSON.parse(JSON.stringify(window.Q2_IND_DEF || [])); b.indVal = (window.Q2_IND_VAL || []).map(function (v, i) { return Object.assign({ id: 'iv' + i }, v); }); sv(b); } return { defs: b.indDef, vals: b.indVal }; }
+      try { var r = await Promise.all([q(sb.from('q2_ind_def').select('*').order('ordem')), q(sb.from('q2_ind_val').select('*'))]); return { defs: r[0], vals: r[1] }; } catch (e) { console.warn('[indicadores]', e.message || e); return { defs: [], vals: [], erro: e.message || String(e) }; }
+    },
+    async saveIndValor(r) {
+      r.atualizado_em = new Date().toISOString();
+      if (demo) { var b = banco(); b.indVal = b.indVal || []; var i = b.indVal.findIndex(function (x) { return x.codigo === r.codigo && x.ano === r.ano && x.mes === r.mes; }); if (i < 0) { r.id = uid(); b.indVal.push(r); } else b.indVal[i] = Object.assign(b.indVal[i], r); sv(b); return r; }
+      return q(sb.from('q2_ind_val').upsert(r, { onConflict: 'codigo,ano,mes' }));
+    },
+    async delIndValor(codigo, ano, mes) {
+      if (demo) { var b = banco(); b.indVal = (b.indVal || []).filter(function (x) { return !(x.codigo === codigo && x.ano === ano && x.mes === mes); }); sv(b); return; }
+      return q(sb.from('q2_ind_val').delete().eq('codigo', codigo).eq('ano', ano).eq('mes', mes));
+    },
+    async saveIndMeta(codigo, meta) {
+      if (demo) { var b = banco(); (b.indDef || []).forEach(function (x) { if (x.codigo === codigo) x.meta = meta; }); sv(b); return; }
+      return q(sb.from('q2_ind_def').update({ meta: meta }).eq('codigo', codigo));
+    },
     /* ----- assinaturas cadastradas (Ajustes) ----- */
     async assinaturas() {
       if (demo) return banco().assin || [];

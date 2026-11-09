@@ -248,3 +248,16 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 .fv-sec{margin:18px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--bd);font-size:.9rem;letter-spacing:0;text-transform:none;color:var(--esc)}
 .fv-tab td{padding:3px}.fv-tab input,.fv-tab select{width:100%;min-width:110px;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;font:inherit;font-size:.82rem;background:var(--card,#fff);color:inherit}
 .fv-x{width:34px;text-align:center}
+
+/* indicadores */
+.ind-card{margin-bottom:14px}
+.ind-h{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:6px}
+.ind-h small{display:block;color:var(--mut);font-size:.76rem;margin-top:2px}
+.ind-meta{font-size:.8rem;display:flex;align-items:center;gap:6px;color:var(--mut)}
+.ind-meta input{width:84px;padding:5px 8px;border:1px solid var(--bd);border-radius:8px;font:inherit}
+.ind-mes{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px}
+.ind-mes label{display:flex;flex-direction:column;gap:2px;font-size:.7rem;color:var(--mut)}
+.ind-mes input{padding:6px 8px;border:1px solid var(--bd);border-radius:8px;font:inherit;font-size:.84rem;min-width:0}
+@media(min-width:900px){.ind-mes{grid-template-columns:repeat(12,1fr)}}
+.sel-ano{padding:8px 12px;border:1px solid var(--bd);border-radius:10px;font:inherit;background:var(--card,#fff);color:inherit}
+.ind-rel{break-inside:avoid;margin-bottom:14px}

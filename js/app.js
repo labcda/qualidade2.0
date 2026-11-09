@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [] }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '' }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-09a';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin);
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || '';
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -53,18 +53,18 @@
   function contagem(lista) { var o = { A: 0, P: 0, N: 0, NA: 0, F: 0, t: 0, sem: 0 }; lista.forEach(function (r) { var x = resp(r); o.t++; if (x.f && x.v !== 'A') o.F++; else o[x.v]++; if (!prova(r).ok && x.v !== 'NA' && !x.f) o.sem++; }); return o; }
 
   /* ---------- estrutura ---------- */
-  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['frm', '✎', 'Preencher formulário'], ['regs', '▦', 'Formulários preenchidos'], ['cq', '◔', 'Controle analítico'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
+  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['frm', '✎', 'Preencher formulário'], ['regs', '▦', 'Formulários preenchidos'], ['cq', '◔', 'Controle analítico'], ['ind', '▥', 'Indicadores'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
   function irPara(p, extra) { S.pg = p; if (extra) Object.assign(S, extra); if (p !== 'docs') S.docId = null; render(); window.scrollTo(0, 0); $('side').classList.remove('aberto'); history.replaceState(null, '', '#' + p); }
   function menu() {
     var u = DB.user, pend = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).length;
     $('side').innerHTML = '<div class="marca"><img src="img/logo-cda.png" alt="CDA"><div><b>Qualidade 2.0</b><small>Laboratório CDA</small></div></div>' +
-      MENU.map(function (m, i) { return (i === 8 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
+      MENU.map(function (m, i) { return (i === 9 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
       '<div class="eu"><div class="av">' + h((u.nome || '?').charAt(0).toUpperCase()) + '</div><div><b>' + h(u.nome) + '</b><small>' + h(({ admin: 'Administrador', elabora: 'Elabora', revisa: 'Revisa', aprova: 'Aprova', consulta: 'Consulta' })[u.papel]) + (DB.demo ? ' · demonstração' : '') + '</small></div><button data-sair>Sair</button></div>';
   }
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
   function render() {
     menu(); var m = $('main');
-    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, frm: pgForms, regs: pgRegs, cq: pgCq, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
+    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, frm: pgForms, regs: pgRegs, cq: pgCq, ind: pgInd, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
     m.innerHTML = f();
     if (S.pg === 'inicio') requestAnimationFrame(function () { document.querySelectorAll('.bar i[data-w]').forEach(function (e) { e.style.width = e.dataset.w + '%'; }); var a = $('anelc'); if (a) a.style.strokeDashoffset = a.dataset.off; });
   }
@@ -476,6 +476,68 @@
     return o;
   }
 
+  /* ---------- Indicadores: metas e resultados mensais ---------- */
+  var MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  function indAno() { var s = S.ind || (S.ind = { ano: 0, rel: false }); if (!s.ano) { var ys = S.d.indVal.map(function (v) { return v.ano; }); s.ano = ys.length ? Math.max.apply(null, ys) : new Date().getFullYear(); } return s.ano; }
+  function indVals(cod, ano) { var m = []; for (var i = 0; i < 12; i++) m.push(null); S.d.indVal.forEach(function (v) { if (v.codigo === cod && v.ano === ano) m[v.mes - 1] = Number(v.valor); }); return m; }
+  function indFora(df, v) { if (v === null || df.meta === null || df.meta === undefined || df.sentido === 'neutro') return false; return df.sentido === 'maior' ? v < Number(df.meta) : v > Number(df.meta); }
+  function fmtInd(v) { return v === null || v === undefined ? '' : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
+  function svgInd(df, m) {
+    var W = 560, H = 150, pl = 40, pr = 10, pt = 16, pb = 22, tem = m.filter(function (x) { return x !== null; });
+    if (!tem.length) return '<div class="vazio" style="padding:14px">Sem valores neste ano.</div>';
+    var meta = df.meta === null || df.meta === undefined ? null : Number(df.meta), top = Math.max.apply(null, tem.concat(meta === null ? [0] : [meta])), top2 = top <= 0 ? 1 : top * 1.18, bw = (W - pl - pr) / 12;
+    function ys(v) { return pt + (1 - v / top2) * (H - pt - pb); }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto" role="img" aria-label="' + h(df.nome) + '">';
+    [0, 0.5, 1].forEach(function (f) { var v = top2 * f; s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(v) + '" y2="' + ys(v) + '" stroke="#cbd5e1" stroke-width=".6"/><text x="' + (pl - 5) + '" y="' + (ys(v) + 3) + '" font-size="9" text-anchor="end" fill="#64748b">' + fmtInd(Math.round(v * 10) / 10) + '</text>'; });
+    m.forEach(function (v, i) {
+      var x = pl + i * bw + bw * 0.18, w = bw * 0.64;
+      if (v !== null) { var fo = indFora(df, v), cor = df.sentido === 'neutro' || meta === null ? '#0e9aa7' : fo ? '#dc2626' : '#16a34a'; s += '<rect x="' + x.toFixed(1) + '" y="' + ys(v).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + Math.max(1, ys(0) - ys(v)).toFixed(1) + '" rx="2" fill="' + cor + '"><title>' + MESES[i] + ': ' + fmtInd(v) + ' ' + h(df.unidade) + '</title></rect><text x="' + (x + w / 2).toFixed(1) + '" y="' + (ys(v) - 3).toFixed(1) + '" font-size="8.5" text-anchor="middle" fill="#334155">' + fmtInd(v) + '</text>'; }
+      s += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 7) + '" font-size="9" text-anchor="middle" fill="#64748b">' + MESES[i] + '</text>';
+    });
+    if (meta !== null) s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(meta) + '" y2="' + ys(meta) + '" stroke="#0b1f3a" stroke-dasharray="5 3" stroke-width="1.1"/><text x="' + (W - pr) + '" y="' + (ys(meta) - 3) + '" font-size="9" text-anchor="end" fill="#0b1f3a">meta ' + fmtInd(meta) + '</text>';
+    return s + '</svg>';
+  }
+  function pgInd() {
+    var ano = indAno(), I = S.ind, pode = DB.pode('escrever'), anos = {}; S.d.indVal.forEach(function (v) { anos[v.ano] = 1; }); anos[new Date().getFullYear()] = 1; anos[ano] = 1;
+    if (!S.d.indDef.length) return topo('Indicadores', 'Metas e resultados mensais', '') + '<div class="vazio">' + (S.d.indErro ? 'As tabelas de indicadores ainda não existem no banco. Rode o arquivo <b>sql/08_indicadores.sql</b> no SQL Editor do Supabase e recarregue.' : 'Nenhum indicador cadastrado.') + '</div>';
+    var grupos = []; S.d.indDef.forEach(function (df) { if (grupos.indexOf(df.grupo) < 0) grupos.push(df.grupo); });
+    var anoSel = '<select id="ind-ano" class="sel-ano">' + Object.keys(anos).sort().map(function (y) { return '<option' + (Number(y) === ano ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>';
+    if (I.rel) {
+      var c = '<p>Indicadores da qualidade de ' + ano + ', com a meta definida e o resultado mensal registrado no sistema. Barras em vermelho estão fora da meta.</p>';
+      grupos.forEach(function (g) {
+        var lst = S.d.indDef.filter(function (df) { return df.grupo === g && indVals(df.codigo, ano).some(function (x) { return x !== null; }); }); if (!lst.length) return;
+        c += '<h2>' + h(g) + '</h2>' + lst.map(function (df) { var m = indVals(df.codigo, ano); return '<div class="ind-rel"><h3>' + h(df.nome) + ' <small>(' + h(df.unidade) + (df.meta !== null && df.meta !== undefined ? ' · meta ' + fmtInd(df.meta) : '') + ')</small></h3>' + svgInd(df, m) + '<table><thead><tr>' + MESES.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '</tr></thead><tbody><tr>' + m.map(function (v) { return '<td>' + fmtInd(v) + '</td>'; }).join('') + '</tr></tbody></table><p style="font-size:.74rem;color:#64748b">Fórmula: ' + h(df.formula || '') + '</p></div>'; }).join('');
+      });
+      return '<button class="voltar" data-indvolta>← Voltar</button><div class="barra-doc topo"><h1>Relatório de indicadores<small>' + ano + '</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div><div class="fundo-folha">' + MD.folha({ codigo: 'IND', titulo: 'Relatório de indicadores · ' + ano, tipo: 'FR', versao: '1', status: 'vigente', elaborador: DB.user.nome, data_elaboracao: hoje() }, c) + '</div>';
+    }
+    var o = topo('Indicadores', 'Metas e resultados mensais · ' + S.d.indDef.length + ' indicadores', anoSel + '<button class="btn" data-indrel>🖨 Relatório do ano</button>');
+    grupos.forEach(function (g) {
+      o += '<h2 class="sec">' + h(g) + '</h2>';
+      S.d.indDef.filter(function (df) { return df.grupo === g; }).forEach(function (df) {
+        var m = indVals(df.codigo, ano), tem = m.some(function (x) { return x !== null; }), ult = null; m.forEach(function (x) { if (x !== null) ult = x; });
+        var sel = ult === null || df.meta === null || df.meta === undefined || df.sentido === 'neutro' ? '' : indFora(df, ult) ? '<span class="selo N">último fora da meta</span>' : '<span class="selo A">último dentro da meta</span>';
+        o += '<div class="vidro pad ind-card" data-indcard="' + h(df.codigo) + '"><div class="ind-h"><div><b>' + h(df.nome) + '</b> ' + sel + '<small>' + h(df.unidade) + (df.sentido === 'maior' ? ' · quanto maior, melhor' : df.sentido === 'menor' ? ' · quanto menor, melhor' : '') + ' · ' + h(df.formula || '') + '</small></div>' +
+          (DB.pode('aprovar') ? '<label class="ind-meta">Meta <input data-indmeta value="' + h(df.meta === null || df.meta === undefined ? '' : String(df.meta).replace('.', ',')) + '" inputmode="decimal" placeholder="—"></label>' : (df.meta !== null && df.meta !== undefined ? '<span class="ind-meta">Meta <b>' + fmtInd(df.meta) + '</b></span>' : '')) + '</div>' +
+          (tem ? svgInd(df, m) : '') +
+          (pode ? '<div class="ind-mes">' + MESES.map(function (x, i) { return '<label><span>' + x + '</span><input data-indv="' + (i + 1) + '" inputmode="decimal" value="' + h(m[i] === null ? '' : String(m[i]).replace('.', ',')) + '"></label>'; }).join('') + '</div><div class="bt"><button class="btn s" data-indsalvar="' + h(df.codigo) + '">Salvar ' + ano + '</button></div>' : (tem ? '' : '<div class="vazio" style="padding:10px">Sem valores neste ano.</div>')) + '</div>';
+      });
+    });
+    return o;
+  }
+  async function salvarInd(cod) {
+    var ano = indAno(), card = document.querySelector('[data-indcard="' + cod + '"]'), df = S.d.indDef.filter(function (x) { return x.codigo === cod; })[0], ant = indVals(cod, ano); if (!card || !df) return;
+    var mt = card.querySelector('[data-indmeta]'), meta = df.meta;
+    if (mt) { var tx = mt.value.trim(); meta = tx === '' ? null : numBR(tx); if (tx !== '' && isNaN(meta)) throw new Error('Meta inválida.'); }
+    var ops = [];
+    [].slice.call(card.querySelectorAll('[data-indv]')).forEach(function (el) {
+      var mes = Number(el.dataset.indv), tx = el.value.trim(), antes = ant[mes - 1];
+      if (tx === '') { if (antes !== null) ops.push(DB.delIndValor(cod, ano, mes)); return; }
+      var n = numBR(tx); if (isNaN(n)) throw new Error('Valor inválido em ' + MESES[mes - 1] + '.');
+      if (antes !== n) ops.push(DB.saveIndValor({ codigo: cod, ano: ano, mes: mes, valor: n, fonte: 'Digitado no sistema', atualizado_por: DB.user.nome }));
+    });
+    if ((df.meta === undefined ? null : df.meta) !== meta) ops.push(DB.saveIndMeta(cod, meta));
+    await Promise.all(ops); DB.log('indicador', cod + ' ' + ano); await carregar(); render(); toast('Indicador salvo.');
+  }
   /* ---------- Preencher formulário: todos os FR da Qualidade anterior ---------- */
   function defForm(cod) { return window.Q2_FORMS.filter(function (f) { return f.c === cod; })[0]; }
   function camposDe(f) { return f.modo === 'mensal' ? (f.cols || []) : (f.campos || []); }
@@ -811,6 +873,9 @@
     if ((a = t.closest('[data-fvdel]'))) { var trr = a.closest('tr'); if (trr) trr.remove(); return; }
     if (t.closest('[data-frmvolta]')) { S.frm = { cod: '', q: '' }; return render(); }
     if (t.closest('[data-frmsalvar]')) { try { await salvarForm(); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-indrel]')) { S.ind.rel = true; return render(); }
+    if (t.closest('[data-indvolta]')) { S.ind.rel = false; return render(); }
+    if ((a = t.closest('[data-indsalvar]'))) { try { await salvarInd(a.dataset.indsalvar); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-cqtol]')) { S.cq.tol = true; return render(); }
     if (t.closest('[data-tolvolta]')) { S.cq.tol = false; return render(); }
     if ((a = t.closest('[data-tolsalvar]'))) { try { await salvarTol(a.dataset.tolsalvar); } catch (er) { toast(er.message, 1); } return; }
@@ -856,6 +921,7 @@
   });
   document.addEventListener('input', function (e) {
     if (e.target.dataset && e.target.dataset.api !== undefined && e.target.dataset.apid) varApoio(e.target);
+    if (e.target.id === 'ind-ano') { S.ind.ano = Number(e.target.value); return render(); }
     if (e.target.id === 'fm-q') { S.frm = S.frm || { cod: '', q: '' }; S.frm.q = e.target.value; var p3 = e.target.selectionStart; render(); var n3 = $('fm-q'); if (n3) { n3.focus(); n3.setSelectionRange(p3, p3); } }
     if (e.target.id === 'rg-q') { S.reg.q = e.target.value; var pp = e.target.selectionStart; render(); var nn = $('rg-q'); if (nn) { nn.focus(); nn.setSelectionRange(pp, pp); } }
     if (e.target.id === 'f-q') { S.busca = e.target.value; var p = e.target.selectionStart; render(); var n = $('f-q'); if (n) { n.focus(); n.setSelectionRange(p, p); } }
@@ -881,7 +947,7 @@
   async function iniciar() {
     try { await carregar(); } catch (e) { return telaLogin('Não foi possível carregar os dados: ' + e.message); }
     $('login').classList.add('oculto'); $('app').classList.remove('oculto');
-    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'frm', 'regs', 'cq', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
+    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'frm', 'regs', 'cq', 'ind', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
     render();
   }
   (async function () { try { var u = await DB.init(); if (!u && window.parent !== window && !DB.demo) { document.body.insertAdjacentHTML('beforeend', '<div id="sso-msg" style="position:fixed;inset:0;display:grid;place-items:center;background:#e9f6f5;color:#0b6b66;font:600 1rem sans-serif">Entrando com a sua conta do painel…</div>'); u = await DB.sso(); var m = document.getElementById('sso-msg'); if (m) m.remove(); } if (u) iniciar(); else telaLogin(DB.ssoMotivo ? 'Entrada automática não funcionou: ' + DB.ssoMotivo + (DB.armazenamentoOk() ? '' : ' · o navegador está bloqueando o armazenamento deste site dentro do painel.') : undefined); } catch (e) { var m2 = document.getElementById('sso-msg'); if (m2) m2.remove(); telaLogin(e.message); } })();
