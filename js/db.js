@@ -118,6 +118,24 @@
     async temps(de, ate) { if (demo) return ok(banco().temp.filter(function (t) { return t.dia >= de && t.dia <= ate; })); return q(sb.from('q2_temperaturas').select('*').gte('dia', de).lte('dia', ate).order('criado_em')); },
     async addTemp(t) { t.usuario = st.user ? st.user.nome : ''; if (demo) { var b = banco(); t.id = uid(); t.criado_em = new Date().toISOString(); b.temp.push(t); sv(b); return t; } return q(sb.from('q2_temperaturas').insert(t).select().single()); },
 
+    /* ----- formulários preenchidos (q2_registros) ----- */
+    async registrosResumo() {
+      if (demo) return (banco().regs || []).map(function (r) { var x = Object.assign({}, r); delete x.dados; return x; });
+      try {
+        var out = [], de = 0, passo = 1000;
+        for (;;) { var r = await sb.from('q2_registros').select('id,origem,form,titulo,unidade,periodo,dia,item,usuario').order('id', { ascending: false }).range(de, de + passo - 1); if (r.error) throw r.error; out = out.concat(r.data); if (r.data.length < passo || out.length >= 40000) break; de += passo; }
+        return out;
+      } catch (e) { console.warn('[registros]', e.message || e); return []; }
+    },
+    async registro(id) { if (demo) return (banco().regs || []).filter(function (r) { return r.id === id; })[0] || null; return q(sb.from('q2_registros').select('*').eq('id', id).single()); },
+    async registrosChave(chave, de, ate) {
+      if (demo) return (banco().regs || []).filter(function (r) { return (/^[A-Z]{2,3} \d{3}$/.test(chave) ? r.form === chave : (r.titulo === chave && !r.form)) && (!de || r.dia >= de) && (!ate || r.dia <= ate); });
+      var f = sb.from('q2_registros').select('id,form,titulo,dia,item,usuario,dados');
+      f = /^[A-Z]{2,3} \d{3}$/.test(chave) ? f.eq('form', chave) : f.eq('titulo', chave).eq('form', '');
+      if (de) f = f.gte('dia', de); if (ate) f = f.lte('dia', ate);
+      return q(f.order('dia').limit(5000));
+    },
+
     /* ----- usuários ----- */
     async perfis() { if (demo) return ok([{ id: 'demo', nome: st.user.nome, email: 'demo@local', papel: st.user.papel, ativo: true }]); return q(sb.from('q2_perfis').select('*').order('nome')); },
     async savePerfil(p) { if (demo) return p; return q(sb.from('q2_perfis').update({ nome: p.nome, papel: p.papel, ativo: p.ativo }).eq('id', p.id)); },
