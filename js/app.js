@@ -42,18 +42,18 @@
   function contagem(lista) { var o = { A: 0, P: 0, N: 0, NA: 0, F: 0, t: 0, sem: 0 }; lista.forEach(function (r) { var x = resp(r); o.t++; if (x.f && x.v !== 'A') o.F++; else o[x.v]++; if (!prova(r).ok && x.v !== 'NA' && !x.f) o.sem++; }); return o; }
 
   /* ---------- estrutura ---------- */
-  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['regs', '▦', 'Formulários preenchidos'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
+  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['regs', '▦', 'Formulários preenchidos'], ['cq', '◔', 'Controle analítico'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
   function irPara(p, extra) { S.pg = p; if (extra) Object.assign(S, extra); if (p !== 'docs') S.docId = null; render(); window.scrollTo(0, 0); $('side').classList.remove('aberto'); history.replaceState(null, '', '#' + p); }
   function menu() {
     var u = DB.user, pend = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).length;
     $('side').innerHTML = '<div class="marca"><img src="img/logo-cda.png" alt="CDA"><div><b>Qualidade 2.0</b><small>Laboratório CDA</small></div></div>' +
-      MENU.map(function (m, i) { return (i === 6 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
+      MENU.map(function (m, i) { return (i === 7 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
       '<div class="eu"><div class="av">' + h((u.nome || '?').charAt(0).toUpperCase()) + '</div><div><b>' + h(u.nome) + '</b><small>' + h(({ admin: 'Administrador', elabora: 'Elabora', revisa: 'Revisa', aprova: 'Aprova', consulta: 'Consulta' })[u.papel]) + (DB.demo ? ' · demonstração' : '') + '</small></div><button data-sair>Sair</button></div>';
   }
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
   function render() {
     menu(); var m = $('main');
-    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, regs: pgRegs, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
+    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, regs: pgRegs, cq: pgCq, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
     m.innerHTML = f();
     if (S.pg === 'inicio') requestAnimationFrame(function () { document.querySelectorAll('.bar i[data-w]').forEach(function (e) { e.style.width = e.dataset.w + '%'; }); var a = $('anelc'); if (a) a.style.strokeDashoffset = a.dataset.off; });
   }
@@ -289,6 +289,111 @@
     });
   }
 
+  /* ---------- controle analítico: variação dos resultados ---------- */
+  var CQ_NOMES = { HEMA_REPET: 'Hematologia · reanálise do dia anterior', HEMA_APOIO: 'Hematologia · apoio', BIOQ_APOIO: 'Bioquímica · apoio' };
+  function cqLinhas(lista) {
+    return lista.map(function (r) { var d = r.dados || {}; return { id: r.id, dia: r.dia || d.data || '', amostra: d.amostra || '', analito: d.analito || r.item || '', equipamento: d.equipamento || '', apoio: d.lab_apoio || '', tipo: d.tipo || '', ref: numBR(d.valor_ref), med: numBR(d.valor_medido), v: numBR(d.variacao_pct), tol: numBR(d.tolerancia_pct) || CQ_TOL, situacao: d.situacao || '', anulado: d.anulado === 'sim', acao: d.acao_corretiva || '' }; })
+      .filter(function (r) { return !r.anulado; });
+  }
+  function fmtN(n) { return isNaN(n) ? '' : String(Math.round(n * 100) / 100).replace('.', ','); }
+  function svgVariacao(l) {
+    l = l.filter(function (r) { return !isNaN(r.v) && r.dia; }).sort(function (a, b) { return a.dia < b.dia ? -1 : 1; }); if (!l.length) return '';
+    var W = 720, H = 200, pl = 40, pr = 12, pt = 12, pb = 26, t0 = Date.parse(l[0].dia), t1 = Date.parse(l[l.length - 1].dia), tol = l[0].tol || CQ_TOL, M = Math.max(30, Math.ceil(tol * 3));
+    function xs(d) { return pl + (t1 === t0 ? (W - pl - pr) / 2 : (Date.parse(d) - t0) / (t1 - t0) * (W - pl - pr)); }
+    function ys(v) { return pt + (M - Math.max(-M, Math.min(M, v))) / (2 * M) * (H - pt - pb); }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-width:100%" role="img" aria-label="Variação dos resultados ao longo do tempo"><rect x="' + pl + '" y="' + ys(tol) + '" width="' + (W - pl - pr) + '" height="' + (ys(-tol) - ys(tol)) + '" fill="rgba(22,163,74,.13)"/>';
+    [[tol, '+' + tol + '%'], [0, '0'], [-tol, '-' + tol + '%']].forEach(function (g) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(g[0]) + '" y2="' + ys(g[0]) + '" stroke="' + (g[0] === 0 ? '#94a3b8' : '#16a34a') + '" stroke-dasharray="' + (g[0] === 0 ? '0' : '4 3') + '" stroke-width=".8"/><text x="' + (pl - 6) + '" y="' + (ys(g[0]) + 3) + '" font-size="10" text-anchor="end" fill="#64748b">' + g[1] + '</text>'; });
+    l.forEach(function (r) { var fora = Math.abs(r.v) > r.tol; s += '<circle cx="' + xs(r.dia).toFixed(1) + '" cy="' + ys(r.v).toFixed(1) + '" r="3.4" fill="' + (fora ? '#dc2626' : '#16a34a') + '" fill-opacity=".8"><title>' + h(r.analito + ' · ' + MD.fmtData(r.dia) + ' · ' + fmtN(r.v) + '%') + '</title></circle>'; });
+    s += '<text x="' + pl + '" y="' + (H - 8) + '" font-size="10" fill="#64748b">' + MD.fmtData(l[0].dia) + '</text><text x="' + (W - pr) + '" y="' + (H - 8) + '" font-size="10" text-anchor="end" fill="#64748b">' + MD.fmtData(l[l.length - 1].dia) + '</text></svg>';
+    return s;
+  }
+  function cqResumo(l) {
+    var n = l.length, fora = l.filter(function (r) { return Math.abs(r.v) > r.tol; }).length, mx = l.reduce(function (m, r) { return isNaN(r.v) ? m : Math.max(m, Math.abs(r.v)); }, 0);
+    return { n: n, fora: fora, ok: n - fora, pct: n ? Math.round((n - fora) / n * 1000) / 10 : 0, max: mx };
+  }
+  function cqTabela(l, limite) {
+    var ord = l.slice().sort(function (a, b) { return a.dia < b.dia ? 1 : a.dia > b.dia ? -1 : 0; });
+    return '<table class="tbl"><thead><tr><th>Data</th><th>Amostra</th><th>Analito</th><th>Equipamento</th><th>Apoio</th><th>Referência</th><th>Medido</th><th>Variação</th><th>Situação</th></tr></thead><tbody>' +
+      ord.slice(0, limite || 400).map(function (r) { var fora = Math.abs(r.v) > r.tol; return '<tr><td>' + (r.dia ? MD.fmtData(r.dia) : '') + '</td><td>' + h(r.amostra) + '</td><td>' + h(r.analito) + '</td><td>' + h(r.equipamento) + '</td><td>' + h(r.apoio) + '</td><td>' + fmtN(r.ref) + '</td><td>' + fmtN(r.med) + '</td><td><b style="color:' + (fora ? '#dc2626' : '#15803d') + '">' + (r.v > 0 ? '+' : '') + fmtN(r.v) + '%</b></td><td>' + (fora ? '<b style="color:#dc2626">FORA</b>' : 'OK') + (fora && r.acao ? '<br><small>' + h(r.acao) + '</small>' : '') + '</td></tr>'; }).join('') +
+      '</tbody></table>' + (ord.length > (limite || 400) ? '<p style="color:var(--mut)">Mostrando ' + (limite || 400) + ' de ' + ord.length + '. Use os filtros para ver os demais.</p>' : '');
+  }
+  function cqFiltrar(todos) {
+    var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false }), de = F.per ? somaDias(hoje(), -F.per) : '';
+    return todos.filter(function (r) { return (!F.tipo || r.tipo === F.tipo) && (!F.analito || r.analito === F.analito) && (!de || r.dia >= de); });
+  }
+  function pgCq() {
+    var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false });
+    var o = F.rel ? '<button class="voltar" data-cqvolta>← Voltar</button><div class="barra-doc topo"><h1>Relatório de controle analítico<small>Variação dos resultados</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>'
+      : topo('Controle analítico', 'Variação dos resultados: CDA × apoio e reanálise', '<button class="btn" data-cqrel>🖨 Relatório</button>');
+    o += '<div id="cq-box"><div class="vazio">Carregando…</div></div>';
+    setTimeout(carregaCq, 20); return o;
+  }
+  async function carregaCq() {
+    var box = $('cq-box'); if (!box) return;
+    try {
+      var todos = cqLinhas(await DB.controleAnalitico()), F = S.cq; box = $('cq-box'); if (!box) return;
+      var analitos = []; todos.forEach(function (r) { if (r.analito && analitos.indexOf(r.analito) < 0) analitos.push(r.analito); }); analitos.sort();
+      var l = cqFiltrar(todos), rs = cqResumo(l);
+      var corpo = '<div class="grade g4" style="margin-bottom:14px">' + [['Comparações', rs.n, '#0e9aa7'], ['Dentro de ±' + CQ_TOL + '%', rs.ok + ' (' + fmtN(rs.pct) + '%)', '#16a34a'], ['Fora da tolerância', rs.fora, rs.fora ? '#dc2626' : '#64748b'], ['Maior variação', fmtN(rs.max) + '%', '#d97706']].map(function (c) { return '<div class="vidro pad" style="border-left:5px solid ' + c[2] + '"><div style="font-size:1.5rem;font-weight:800;color:' + c[2] + '">' + c[1] + '</div><div style="color:var(--mut);font-size:.78rem;font-weight:700">' + c[0] + '</div></div>'; }).join('') + '</div>';
+      if (F.rel) {
+        var tipoTxt = F.tipo ? CQ_NOMES[F.tipo] || F.tipo : 'Todos os tipos', pr = F.per ? 'últimos ' + F.per + ' dias' : 'todo o período';
+        var c = '<p>Variação percentual entre o resultado do CDA e a referência (laboratório de apoio ou reanálise), com tolerância de ±' + CQ_TOL + '%. ' + h(tipoTxt) + (F.analito ? ' · ' + h(F.analito) : '') + ' · ' + pr + '. Emitido em ' + MD.fmtData(hoje()) + ' por ' + h(DB.user ? DB.user.nome : '') + '.</p>' +
+          '<table><thead><tr><th>Comparações</th><th>Dentro de ±' + CQ_TOL + '%</th><th>Fora da tolerância</th><th>Maior variação</th></tr></thead><tbody><tr><td>' + rs.n + '</td><td>' + rs.ok + ' (' + fmtN(rs.pct) + '%)</td><td>' + rs.fora + '</td><td>' + fmtN(rs.max) + '%</td></tr></tbody></table>' + svgVariacao(l) + cqTabela(l, 600);
+        box.innerHTML = '<div class="fundo-folha">' + MD.folha({ codigo: 'CQ', titulo: 'Controle analítico · variação dos resultados', versao: '1', status: 'vigente', tipo: 'FR' }, c) + '</div>';
+        return;
+      }
+      var filtros = '<div class="barra"><select id="cq-tipo"><option value="">Todos os tipos</option>' + Object.keys(CQ_NOMES).map(function (k) { return '<option value="' + k + '"' + (F.tipo === k ? ' selected' : '') + '>' + CQ_NOMES[k] + '</option>'; }).join('') + '</select><select id="cq-per">' + [[30, 'Últimos 30 dias'], [90, 'Últimos 90 dias'], [180, 'Últimos 180 dias'], [365, 'Últimos 12 meses'], [0, 'Tudo']].map(function (p) { return '<option value="' + p[0] + '"' + (F.per === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select><select id="cq-an"><option value="">Todos os analitos</option>' + analitos.map(function (a) { return '<option' + (F.analito === a ? ' selected' : '') + '>' + h(a) + '</option>'; }).join('') + '</select></div>';
+      box.innerHTML = filtros + corpo + (l.length ? '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Variação ao longo do tempo</b><div style="color:var(--mut);font-size:.75rem;margin-bottom:6px">A faixa verde é a tolerância de ±' + CQ_TOL + '%. Pontos vermelhos estão fora.</div>' + svgVariacao(l) + '</div><div class="vidro pad" style="overflow:auto">' + cqTabela(l) + '</div>' : '<div class="vazio">Nenhum resultado neste filtro.</div>');
+    } catch (e) { box = $('cq-box'); if (box) box.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; }
+  }
+  function varApoio(inp) {
+    var id = inp.dataset.apid, i = Number(inp.dataset.api), r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
+    var d = r.dados || {}, x = (S.apRows[id] || [])[i], out = document.querySelector('[data-apvar="' + id + '|' + i + '"]'); if (!x || !out) return;
+    var l = jsonSeg(d.linhas_json, []).filter(function (y) { return y.analito === x.analito; })[0], n = numBR(inp.value);
+    if (!l || isNaN(n) || !inp.value.trim()) { out.textContent = ''; out.className = 'ap-var'; return; }
+    var cda = numBR(l.valor_medido), rep = d.tipo === 'HEMA_REPET', ref = rep ? cda : n, med = rep ? n : cda;
+    if (!ref) { out.textContent = 'referência zero: sem cálculo'; out.className = 'ap-var fora'; return; }
+    var v = Math.round((med - ref) / ref * 10000) / 100, ok = Math.abs(v) <= CQ_TOL;
+    out.textContent = 'Variação ' + (v > 0 ? '+' : '') + fmtN(v) + '% · ' + (ok ? 'dentro de ±' + CQ_TOL + '%' : 'FORA de ±' + CQ_TOL + '%'); out.className = 'ap-var ' + (ok ? 'ok' : 'fora');
+  }
+
+  /* ---------- O que preencher hoje (formulários de rotina diária) ---------- */
+  function rotinaFeita(it, dia) { return S.d.regs.filter(function (r) { return r.origem === 'Registros' && r.form === it.form && r.item === it.item && (r.unidade || 'Matriz') === it.unidade && r.dia === dia; })[0]; }
+  function tempsFeitas(dia) { var eq = S.d.equip; return { n: eq.filter(function (e) { return S.d.temps.some(function (t) { return t.equip_id === e.id && t.dia === dia; }); }).length, total: eq.length }; }
+  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n); }
+  function pgHoje() {
+    var dia = S.rdData || hoje(), tf = tempsFeitas(dia), o = '<div class="barra"><label class="hj-dt">Data do registro <input type="date" id="rd-data" value="' + dia + '" max="' + hoje() + '"></label><button class="btn s p" data-rdhoje>Hoje</button><span style="color:var(--mut);font-size:.8rem">Você pode lançar um dia que ficou para trás.</span></div><div class="hj-lista">';
+    o += '<div class="vidro hj-it ' + (tf.total && tf.n >= tf.total ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Temperatura das geladeiras</b><small>' + (tf.total ? tf.n + ' de ' + tf.total + ' equipamentos registrados nesta data' : 'Nenhum equipamento cadastrado') + '</small></div><button class="btn s p" data-rdtab="temp">' + (tf.n >= tf.total ? 'Ver' : 'Registrar') + '</button></div>';
+    window.Q2_ROTINA.forEach(function (it, i) {
+      var f = rotinaFeita(it, dia), pode = DB.pode('escrever');
+      o += '<div class="vidro hj-it ' + (f ? 'ok' : 'pend') + '" data-hjcard="' + i + '"><span class="hj-pt"></span><div class="hj-t"><b>' + h(it.t) + '</b><small>' + h(it.form) + ' · ' + h(it.item) + (it.unidade !== 'Matriz' ? ' · ' + h(it.unidade) : '') + (f ? ' · registrado por ' + h(f.usuario || '—') : '') + '</small></div>' +
+        (f ? '<button class="btn s p" data-regver2="' + f.id + '">Ver registro</button>' : (pode ? '<button class="btn s" data-hjabrir="' + i + '">Preencher</button>' : '')) +
+        (f ? '' : '<div class="hj-form">' + (it.aviso ? '<p class="hj-av">' + h(it.aviso) + '</p>' : '') + '<div class="hj-campos">' + it.cols.map(function (c) {
+          if (c.tipo === 'check') return '<label class="hj-ck"><input type="checkbox" data-hjf="' + c.id + '"> ' + h(c.label) + '</label>';
+          return '<label class="cmp hj-c"><span>' + h(c.label) + (c.min != null ? ' <i>(' + c.min + ' a ' + c.max + ')</i>' : '') + '</span><input ' + (c.tipo === 'numero' ? 'inputmode="decimal"' : '') + ' data-hjf="' + c.id + '"></label>';
+        }).join('') + '</div><div class="bt"><button class="btn" data-hjsalvar="' + i + '">Registrar</button></div></div>') + '</div>';
+    });
+    return o + '</div>';
+  }
+  async function salvarRotina(i) {
+    var it = window.Q2_ROTINA[i], dia = S.rdData || hoje(), card = document.querySelector('[data-hjcard="' + i + '"]'), dados = {}, fora = [], marcou = false, mediu = false;
+    if (rotinaFeita(it, dia)) throw new Error('Este formulário já foi registrado nesta data.');
+    it.cols.forEach(function (c) {
+      var el = card.querySelector('[data-hjf="' + c.id + '"]');
+      if (c.tipo === 'check') { dados[c.id] = !!el.checked; if (el.checked) marcou = true; }
+      else if (c.tipo === 'numero') { var v = el.value.trim(); if (v === '') return; var n = numBR(v); if (isNaN(n)) throw new Error('Valor inválido em "' + c.label + '".'); dados[c.id] = n; mediu = true; if (c.min != null && (n < c.min || n > c.max)) fora.push(c.label); }
+      else if (el.value.trim()) dados[c.id] = el.value.trim();
+    });
+    var temNum = it.cols.some(function (c) { return c.tipo === 'numero'; }), temCk = it.cols.some(function (c) { return c.tipo === 'check'; });
+    if (temNum && !mediu) throw new Error('Preencha ao menos uma medição.');
+    if (!temNum && temCk && !marcou && !dados.obs) throw new Error('Marque o que foi feito (ou explique nas observações o motivo de não ter feito).');
+    if (fora.length && !dados.obs) throw new Error('Fora da faixa: ' + fora.join(', ') + '. Descreva a ação nas observações.');
+    dados._chave = String(Number(dia.slice(8))); dados._versao = 'q2';
+    await DB.addRegistros([{ origem: 'Registros', form: it.form, titulo: it.form, unidade: it.unidade, periodo: dia.slice(0, 7), dia: dia, item: it.item, usuario: DB.user.nome, criado_em: new Date().toISOString(), dados: dados }]);
+    DB.log('registro', it.form + ' ' + it.item + ' ' + dia + (fora.length ? ' (fora da faixa)' : ''));
+    await carregar(); render(); toast('Registrado: ' + it.t + '.');
+  }
+
   /* ---------- aguardando retorno do apoio (digitar o que o laboratório de apoio devolveu) ---------- */
   var CQ_TOL = 10;
   function nomeTipoCq(t) { var s = String(t || '').toLowerCase().replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -310,7 +415,7 @@
     S.apRows[r.id] = rows;
     var corpo = rows.map(function (x, i) {
       var l = linhas.filter(function (y) { return y.analito === x.analito; })[0] || {};
-      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Original' : 'CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small></div><div class="ap-in"><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="' + (rep ? 'Reanálise' : h(x.lab)) + '"><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div></div>';
+      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Original' : 'CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small></div><div class="ap-in"><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="' + (rep ? 'Reanálise' : h(x.lab)) + '"><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div><div class="ap-var" data-apvar="' + r.id + '|' + i + '"></div></div>';
     }).join('');
     return '<div class="vidro ap-card' + (aberto ? ' aberto' : '') + '" data-apcard="' + r.id + '"><button type="button" class="ap-head" data-apabrir="' + r.id + '"><span class="ap-tt"><b>Amostra ' + h(d.amostra) + '</b><small>' + h(nomeCqLongo(d.tipo)) + ' · coletada em ' + MD.fmtData(d.data) + '</small></span><span class="ap-meta"><span class="selo ' + (esp > 7 ? 'N' : 'P') + '">há ' + esp + ' dia' + (esp === 1 ? '' : 's') + '</span><em>' + rows.length + ' exame' + (rows.length === 1 ? '' : 's') + '</em><i class="ap-seta">▾</i></span></button>' +
       '<div class="ap-corpo">' + (d.status === 'PARCIAL' ? '<p class="ap-obs">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + '<div class="ap-grid">' + (corpo || '<p>Tudo lançado.</p>') + '</div>' +
@@ -357,11 +462,13 @@
 
   /* ---------- registros do dia ---------- */
   function pgRegistros() {
-    var tab = S.rdTab || 'apoio', dia = S.rdia || hoje(), o = topo('Registros do dia', 'Rotina diária do laboratório');
+    var tab = S.rdTab || 'hoje', dia = S.rdia || hoje(), o = topo('Registros do dia', 'Tudo o que se preenche na rotina do laboratório');
     function aba(id, ic, t, d, extra) { return '<button type="button" class="vidro pad rd-card' + (tab === id ? ' on' : '') + '" data-rdtab="' + id + '"><span class="rd-ic">' + ic + '</span><b>' + t + (extra || '') + '</b><small>' + d + '</small></button>'; }
-    o += '<div class="grade g4 anim rd-tabs">' + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') +
-      '<button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
-    if (tab === 'apoio') o += '<div id="apoio-box"><div class="vazio">Carregando…</div></div>';
+    var ph = pendHoje(S.rdData || hoje());
+    o += '<div class="anim rd-tabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">' + aba('hoje', '✅', 'O que preencher hoje', 'Limpeza, temperatura e umidade, geladeiras', ph ? '<em class="rd-n">' + ph + '</em>' : '') + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') +
+      '<button type="button" class="vidro pad rd-card" data-ir="cq"><span class="rd-ic">◔</span><b>Variação dos resultados</b><small>Controle analítico: tabela, gráfico e relatório</small></button><button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
+    if (tab === 'hoje') o += pgHoje();
+    else if (tab === 'apoio') o += '<div id="apoio-box"><div class="vazio">Carregando…</div></div>';
     else { o += '<div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>'; setTimeout(carregaTemp, 30); }
     setTimeout(carregaApoio, 20); return o;
   }
@@ -448,6 +555,12 @@
     if (t.closest('[data-regvolta]')) { S.reg = { chave: '', q: '', mes: '', id: null }; return render(); }
     if (t.closest('[data-regvolta2]')) { S.reg.id = null; S.reg.rel = false; return render(); }
     if (t.closest('[data-regrel]')) { S.reg.rel = true; S.reg.dias = 90; S.reg.id = null; return render(); }
+    if (t.closest('[data-cqrel]')) { S.cq.rel = true; return render(); }
+    if (t.closest('[data-cqvolta]')) { S.cq.rel = false; return render(); }
+    if ((a = t.closest('[data-hjabrir]'))) { a.closest('.hj-it').classList.toggle('aberto'); return; }
+    if ((a = t.closest('[data-hjsalvar]'))) { try { await salvarRotina(Number(a.dataset.hjsalvar)); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-regver2]'))) { var rg = S.d.regs.filter(function (x) { return String(x.id) === a.dataset.regver2; })[0]; if (rg) { S.reg = { chave: rg.form || rg.titulo, q: '', mes: '', id: rg.id }; return irPara('regs'); } return; }
+    if (t.closest('[data-rdhoje]')) { S.rdData = hoje(); return render(); }
     if ((a = t.closest('[data-rdtab]'))) { S.rdTab = a.dataset.rdtab; return render(); }
     if ((a = t.closest('[data-apabrir]'))) { a.closest('.ap-card').classList.toggle('aberto'); return; }
     if ((a = t.closest('[data-apsalvar]'))) { try { await salvarApoio(a.dataset.apsalvar); } catch (er) { toast(er.message, 1); } return; }
@@ -478,10 +591,11 @@
     if (t.closest('[data-salvarusu]')) { var b = $('usu-box'); try { for (var i = 0; i < b._lista.length; i++) { var p = b._lista[i]; await DB.savePerfil({ id: p.id, nome: b.querySelector('[data-pn="' + p.id + '"]').value, papel: b.querySelector('[data-pp="' + p.id + '"]').value, ativo: b.querySelector('[data-pa="' + p.id + '"]').checked }); } toast('Usuários salvos.'); } catch (er) { toast(er.message, 1); } return; }
   });
   document.addEventListener('input', function (e) {
+    if (e.target.dataset && e.target.dataset.api !== undefined && e.target.dataset.apid) varApoio(e.target);
     if (e.target.id === 'rg-q') { S.reg.q = e.target.value; var pp = e.target.selectionStart; render(); var nn = $('rg-q'); if (nn) { nn.focus(); nn.setSelectionRange(pp, pp); } }
     if (e.target.id === 'f-q') { S.busca = e.target.value; var p = e.target.selectionStart; render(); var n = $('f-q'); if (n) { n.focus(); n.setSelectionRange(p, p); } }
   });
-  document.addEventListener('change', function (e) { if (e.target.id === 'f-t') { S.tipo = e.target.value; render(); } if (e.target.id === 'f-s') { S.situ = e.target.value; render(); } if (e.target.id === 'rg-mes') { S.reg.mes = e.target.value; render(); } if (e.target.id === 'rg-per') { S.reg.dias = Number(e.target.value); render(); } if (e.target.id === 'ev-per') { S.rel.dias = Number(e.target.value); render(); } if (e.target.id === 'r-dia') { S.rdia = e.target.value || hoje(); carregaTemp(); } });
+  document.addEventListener('change', function (e) { if (e.target.id === 'f-t') { S.tipo = e.target.value; render(); } if (e.target.id === 'f-s') { S.situ = e.target.value; render(); } if (e.target.id === 'cq-tipo') { S.cq.tipo = e.target.value; carregaCq(); } if (e.target.id === 'cq-per') { S.cq.per = Number(e.target.value); carregaCq(); } if (e.target.id === 'cq-an') { S.cq.analito = e.target.value; carregaCq(); } if (e.target.id === 'rd-data') { S.rdData = e.target.value || hoje(); render(); } if (e.target.id === 'rg-mes') { S.reg.mes = e.target.value; render(); } if (e.target.id === 'rg-per') { S.reg.dias = Number(e.target.value); render(); } if (e.target.id === 'ev-per') { S.rel.dias = Number(e.target.value); render(); } if (e.target.id === 'r-dia') { S.rdia = e.target.value || hoje(); carregaTemp(); } });
   document.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && DB.user) { e.preventDefault(); busca(); } });
 
   /* ---------- entrada ---------- */
@@ -502,7 +616,7 @@
   async function iniciar() {
     try { await carregar(); } catch (e) { return telaLogin('Não foi possível carregar os dados: ' + e.message); }
     $('login').classList.add('oculto'); $('app').classList.remove('oculto');
-    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'regs', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
+    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'regs', 'cq', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
     render();
   }
   (async function () { try { var u = await DB.init(); if (!u && window.parent !== window && !DB.demo) { document.body.insertAdjacentHTML('beforeend', '<div id="sso-msg" style="position:fixed;inset:0;display:grid;place-items:center;background:#e9f6f5;color:#0b6b66;font:600 1rem sans-serif">Entrando com a sua conta do painel…</div>'); u = await DB.sso(); var m = document.getElementById('sso-msg'); if (m) m.remove(); } if (u) iniciar(); else telaLogin(DB.ssoMotivo ? 'Entrada automática não funcionou: ' + DB.ssoMotivo + (DB.armazenamentoOk() ? '' : ' · o navegador está bloqueando o armazenamento deste site dentro do painel.') : undefined); } catch (e) { var m2 = document.getElementById('sso-msg'); if (m2) m2.remove(); telaLogin(e.message); } })();

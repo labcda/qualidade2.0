@@ -212,3 +212,19 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 .ap-in{display:flex;align-items:center;gap:10px}
 .ap-in>input:not([type=checkbox]){flex:1;min-width:0;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;font:inherit;font-size:.88rem;background:#fff}
 .ap-nf{display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--mut);white-space:nowrap}
+
+/* o que preencher hoje */
+.hj-lista{display:flex;flex-direction:column;gap:10px}
+.hj-dt{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;color:var(--mut)}.hj-dt input{padding:8px 10px;border:1px solid var(--bd);border-radius:10px;font:inherit;background:#fff}
+.hj-it{display:grid;grid-template-columns:14px 1fr auto;gap:12px;align-items:center;padding:14px 18px;border-left:5px solid var(--tq)}
+.hj-it.pend{border-left-color:#d97706}.hj-it.ok{border-left-color:#16a34a}
+.hj-pt{width:12px;height:12px;border-radius:50%;background:#d97706}.hj-it.ok .hj-pt{background:#16a34a}
+.hj-t b{display:block;font-size:.94rem}.hj-t small{color:var(--mut);font-size:.76rem}
+.hj-form{display:none;grid-column:1 / -1;padding-top:10px;border-top:1px solid var(--bd)}.hj-it.aberto .hj-form{display:block}
+.hj-av{margin:0 0 10px;color:#92400e;background:#fef3c7;padding:8px 12px;border-radius:10px;font-size:.8rem}
+.hj-campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 18px;align-items:end}
+.hj-ck{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;padding:10px 12px;border:1px solid var(--bd);border-radius:12px;background:rgba(255,255,255,.6);cursor:pointer}
+.hj-c span i{font-style:normal;color:var(--mut);font-weight:500}
+
+/* variação ao vivo e controle analítico */
+.ap-var{min-height:1em;font-size:.74rem;font-weight:800;color:var(--mut)}.ap-var.ok{color:#15803d}.ap-var.fora{color:#dc2626}

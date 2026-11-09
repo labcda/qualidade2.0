@@ -138,6 +138,10 @@
       return q(f.order('dia').limit(5000));
     },
 
+    async controleAnalitico() {
+      if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'ControleAnalitico'; });
+      return q(sb.from('q2_registros').select('id,dia,item,dados').eq('origem', 'ControleAnalitico').order('dia', { ascending: false }).limit(8000));
+    },
     async pendentesApoio() {
       if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'CQPendentes'; });
       return q(sb.from('q2_registros').select('*').eq('origem', 'CQPendentes').order('dia'));
