@@ -297,24 +297,24 @@
   function numBR(v) { var s = String(v === null || v === undefined ? '' : v).trim(); if (!s) return NaN; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s); }
   function analitosUnicos(linhas) { var u = [], vis = {}; linhas.forEach(function (l) { if (!vis[l.analito]) { vis[l.analito] = 1; u.push(l.analito); } }); return u; }
   async function carregaApoio() {
-    var box = $('apoio-box'); if (!box) return;
+    var box;
     try {
       var l = (await DB.pendentesApoio()).filter(function (r) { var st = (r.dados || {}).status; return st === 'PENDENTE' || st === 'PARCIAL'; }).sort(function (a, b) { return (a.dados.data || '') < (b.dados.data || '') ? -1 : 1; });
-      S.apoio = l; S.apRows = {}; box = $('apoio-box'); if (!box) return;
-      box.innerHTML = l.length ? l.map(cartaoApoio).join('') : '<div class="vazio">Nenhuma amostra aguardando o retorno do apoio.</div>';
+      S.apoio = l; S.apRows = {}; var bn = $('apoio-n'); if (bn) bn.textContent = l.length || ''; box = $('apoio-box'); if (!box) return;
+      box.innerHTML = l.length ? l.map(function (r) { return cartaoApoio(r, l.length === 1); }).join('') : '<div class="vazio">Nenhuma amostra aguardando o retorno do apoio.</div>';
     } catch (e) { box = $('apoio-box'); if (box) box.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; }
   }
-  function cartaoApoio(r) {
+  function cartaoApoio(r, aberto) {
     var d = r.dados || {}, labs = jsonSeg(d.labs_json, []), linhas = jsonSeg(d.linhas_json, []), feito = jsonSeg(d.feito_json, []), esp = Math.max(0, -(dias(d.data) || 0)), rep = d.tipo === 'HEMA_REPET', rows = [];
     labs.forEach(function (lab) { analitosUnicos(linhas).forEach(function (an) { if (feito.indexOf(an + '|' + lab) < 0) rows.push({ analito: an, lab: lab }); }); });
     S.apRows[r.id] = rows;
     var corpo = rows.map(function (x, i) {
       var l = linhas.filter(function (y) { return y.analito === x.analito; })[0] || {};
-      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Valor original' : 'Valor do CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small></div><label class="ap-v"><span>' + (rep ? 'Reanálise' : h(x.lab)) + '</span><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="valor"></label><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div>';
+      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Original' : 'CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small></div><div class="ap-in"><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="' + (rep ? 'Reanálise' : h(x.lab)) + '"><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div></div>';
     }).join('');
-    return '<div class="vidro pad ap-card" data-apcard="' + r.id + '" style="margin-bottom:14px"><div class="ap-t"><div><b>Amostra ' + h(d.amostra) + '</b><small>' + h(nomeCqLongo(d.tipo)) + ' · coletada em ' + MD.fmtData(d.data) + '</small></div><span class="selo ' + (esp > 7 ? 'N' : 'P') + '">há ' + esp + ' dia' + (esp === 1 ? '' : 's') + '</span></div>' +
-      (d.status === 'PARCIAL' ? '<p style="margin:0 0 8px;color:var(--mut);font-size:.8rem">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + (corpo || '<p>Tudo lançado.</p>') +
-      '<label class="cmp" style="margin-top:10px"><span>Ação corretiva (só se algum resultado ficar fora de ±' + CQ_TOL + '%)</span><input data-apacao="' + r.id + '"></label><div class="bt"><button class="btn p v" data-apcancel="' + r.id + '">Cancelar envio</button><button class="btn" data-apsalvar="' + r.id + '">Salvar retorno</button></div></div>';
+    return '<div class="vidro ap-card' + (aberto ? ' aberto' : '') + '" data-apcard="' + r.id + '"><button type="button" class="ap-head" data-apabrir="' + r.id + '"><span class="ap-tt"><b>Amostra ' + h(d.amostra) + '</b><small>' + h(nomeCqLongo(d.tipo)) + ' · coletada em ' + MD.fmtData(d.data) + '</small></span><span class="ap-meta"><span class="selo ' + (esp > 7 ? 'N' : 'P') + '">há ' + esp + ' dia' + (esp === 1 ? '' : 's') + '</span><em>' + rows.length + ' exame' + (rows.length === 1 ? '' : 's') + '</em><i class="ap-seta">▾</i></span></button>' +
+      '<div class="ap-corpo">' + (d.status === 'PARCIAL' ? '<p class="ap-obs">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + '<div class="ap-grid">' + (corpo || '<p>Tudo lançado.</p>') + '</div>' +
+      '<label class="cmp" style="margin-top:12px"><span>Ação corretiva (só se algum resultado ficar fora de ±' + CQ_TOL + '%)</span><input data-apacao="' + r.id + '"></label><div class="bt"><button class="btn p v" data-apcancel="' + r.id + '">Cancelar envio</button><button class="btn" data-apsalvar="' + r.id + '">Salvar retorno</button></div></div></div>';
   }
   async function salvarApoio(id) {
     var r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
@@ -357,12 +357,13 @@
 
   /* ---------- registros do dia ---------- */
   function pgRegistros() {
-    var dia = S.rdia || hoje(), o = topo('Registros do dia', 'Rotina diária do laboratório');
-    o += '<h2 class="sec">Aguardando retorno do apoio</h2><div id="apoio-box"><div class="vazio">Carregando…</div></div>';
-    setTimeout(carregaApoio, 20);
-    o += '<div class="grade g4 anim" style="margin-bottom:18px">' + [['🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente', 1], ['🧼', 'Limpeza e conservação', 'Em breve neste sistema; continua no painel atual', 0], ['🧪', 'Controle interno', 'Em breve neste sistema; continua no painel atual', 0], ['⚠️', 'Não conformidades', 'Em breve neste sistema; continua no painel atual', 0]].map(function (c) { return '<div class="vidro pad" style="' + (c[3] ? 'border-left:5px solid var(--tq)' : 'opacity:.7') + '"><div style="font-size:1.6rem">' + c[0] + '</div><b>' + c[1] + '</b><div style="color:var(--mut);font-size:.78rem;margin-top:4px">' + c[2] + '</div></div>'; }).join('') + '</div>';
-    o += '<h2 class="sec">Temperaturas</h2><div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>';
-    setTimeout(carregaTemp, 30); return o;
+    var tab = S.rdTab || 'apoio', dia = S.rdia || hoje(), o = topo('Registros do dia', 'Rotina diária do laboratório');
+    function aba(id, ic, t, d, extra) { return '<button type="button" class="vidro pad rd-card' + (tab === id ? ' on' : '') + '" data-rdtab="' + id + '"><span class="rd-ic">' + ic + '</span><b>' + t + (extra || '') + '</b><small>' + d + '</small></button>'; }
+    o += '<div class="grade g4 anim rd-tabs">' + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') +
+      '<button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
+    if (tab === 'apoio') o += '<div id="apoio-box"><div class="vazio">Carregando…</div></div>';
+    else { o += '<div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>'; setTimeout(carregaTemp, 30); }
+    setTimeout(carregaApoio, 20); return o;
   }
   async function carregaTemp() {
     var box = $('temp-box'); if (!box) return; var dia = S.rdia || hoje();
@@ -447,6 +448,8 @@
     if (t.closest('[data-regvolta]')) { S.reg = { chave: '', q: '', mes: '', id: null }; return render(); }
     if (t.closest('[data-regvolta2]')) { S.reg.id = null; S.reg.rel = false; return render(); }
     if (t.closest('[data-regrel]')) { S.reg.rel = true; S.reg.dias = 90; S.reg.id = null; return render(); }
+    if ((a = t.closest('[data-rdtab]'))) { S.rdTab = a.dataset.rdtab; return render(); }
+    if ((a = t.closest('[data-apabrir]'))) { a.closest('.ap-card').classList.toggle('aberto'); return; }
     if ((a = t.closest('[data-apsalvar]'))) { try { await salvarApoio(a.dataset.apsalvar); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-apcancel]'))) { try { await cancelarApoio(a.dataset.apcancel); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-imprimir]')) return window.print();
