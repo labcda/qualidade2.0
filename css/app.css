@@ -228,3 +228,12 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 
 /* variação ao vivo e controle analítico */
 .ap-var{min-height:1em;font-size:.74rem;font-weight:800;color:var(--mut)}.ap-var.ok{color:#15803d}.ap-var.fora{color:#dc2626}
+
+/* preencher formulário */
+.obr{color:#dc2626;font-style:normal;font-weight:800}
+.fv-w{grid-column:1 / -1;display:block;margin-top:12px}
+.fv-multi{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.fv-g{margin:14px 0 4px;font-size:.78rem;letter-spacing:.06em;color:var(--esc)}
+.fv-ck{display:grid;grid-template-columns:minmax(200px,1fr) auto minmax(140px,220px);gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.84rem}
+.fv-r{display:flex;gap:10px}.fv-r label{display:flex;align-items:center;gap:3px;font-weight:700;font-size:.76rem}
+@media(max-width:720px){.fv-ck{grid-template-columns:1fr}}

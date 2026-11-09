@@ -152,6 +152,23 @@
       if (demo) { var b = banco(); b.tol = (b.tol || []).filter(function (x) { return x.chave !== chave; }); sv(b); return; }
       return q(sb.from('q2_tolerancias').delete().eq('chave', chave));
     },
+    /* ----- controle da FIA 100 (semanal) ----- */
+    async fia() {
+      if (demo) return banco().fia || [];
+      try { return await q(sb.from('q2_fia').select('*').order('data')); } catch (e) { console.warn('[fia]', e.message || e); return []; }
+    },
+    async saveFia(r) {
+      if (demo) { var b = banco(); b.fia = b.fia || []; var i = b.fia.findIndex(function (x) { return x.data === r.data; }); if (i < 0) { r.id = Date.now(); b.fia.push(r); } else b.fia[i] = Object.assign(b.fia[i], r); sv(b); return r; }
+      return q(sb.from('q2_fia').upsert(r, { onConflict: 'data' }));
+    },
+    async fiaFaixas() {
+      if (demo) return banco().fiaFx || null;
+      try { var l = await q(sb.from('q2_fia_faixas').select('*').eq('id', 1)); return l[0] || null; } catch (e) { return null; }
+    },
+    async saveFiaFaixas(f) {
+      if (demo) { var b = banco(); b.fiaFx = Object.assign({ id: 1 }, f); sv(b); return; }
+      return q(sb.from('q2_fia_faixas').upsert(Object.assign({ id: 1 }, f), { onConflict: 'id' }));
+    },
     async controleAnalitico() {
       if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'ControleAnalitico'; });
       return q(sb.from('q2_registros').select('id,dia,item,dados').eq('origem', 'ControleAnalitico').order('dia', { ascending: false }).limit(8000));

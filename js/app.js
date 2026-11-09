@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {} }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-06b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; });
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null;
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return d.origem === 'Biblioteca CDA 10/2026'; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -42,18 +42,18 @@
   function contagem(lista) { var o = { A: 0, P: 0, N: 0, NA: 0, F: 0, t: 0, sem: 0 }; lista.forEach(function (r) { var x = resp(r); o.t++; if (x.f && x.v !== 'A') o.F++; else o[x.v]++; if (!prova(r).ok && x.v !== 'NA' && !x.f) o.sem++; }); return o; }
 
   /* ---------- estrutura ---------- */
-  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['regs', '▦', 'Formulários preenchidos'], ['cq', '◔', 'Controle analítico'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
+  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['frm', '✎', 'Preencher formulário'], ['regs', '▦', 'Formulários preenchidos'], ['cq', '◔', 'Controle analítico'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
   function irPara(p, extra) { S.pg = p; if (extra) Object.assign(S, extra); if (p !== 'docs') S.docId = null; render(); window.scrollTo(0, 0); $('side').classList.remove('aberto'); history.replaceState(null, '', '#' + p); }
   function menu() {
     var u = DB.user, pend = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).length;
     $('side').innerHTML = '<div class="marca"><img src="img/logo-cda.png" alt="CDA"><div><b>Qualidade 2.0</b><small>Laboratório CDA</small></div></div>' +
-      MENU.map(function (m, i) { return (i === 7 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
+      MENU.map(function (m, i) { return (i === 8 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
       '<div class="eu"><div class="av">' + h((u.nome || '?').charAt(0).toUpperCase()) + '</div><div><b>' + h(u.nome) + '</b><small>' + h(({ admin: 'Administrador', elabora: 'Elabora', revisa: 'Revisa', aprova: 'Aprova', consulta: 'Consulta' })[u.papel]) + (DB.demo ? ' · demonstração' : '') + '</small></div><button data-sair>Sair</button></div>';
   }
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
   function render() {
     menu(); var m = $('main');
-    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, regs: pgRegs, cq: pgCq, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
+    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, frm: pgForms, regs: pgRegs, cq: pgCq, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
     m.innerHTML = f();
     if (S.pg === 'inicio') requestAnimationFrame(function () { document.querySelectorAll('.bar i[data-w]').forEach(function (e) { e.style.width = e.dataset.w + '%'; }); var a = $('anelc'); if (a) a.style.strokeDashoffset = a.dataset.off; });
   }
@@ -172,7 +172,7 @@
   function nRegs(cod) { return S.d.regs.filter(function (r) { return r.form === cod; }).length; }
   function chaveReg(r) { return r.form || r.titulo; }
   function rotuloCampo(k) { var t = String(k).replace(/^_+/, '').replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
-  function valorCampo(v) { if (v === null || v === undefined) return ''; if (v === true) return 'Sim'; if (v === false) return 'Não'; if (typeof v === 'string' && /^\s*[\[{]/.test(v)) { try { return valorCampo(JSON.parse(v)); } catch (e) { return v; } } if (Array.isArray(v)) return v.map(valorCampo).join('; '); if (typeof v === 'object') return Object.keys(v).map(function (k) { return rotuloCampo(k) + ': ' + valorCampo(v[k]); }).join(' · '); return String(v); }
+  function valorCampo(v) { if (v === null || v === undefined) return ''; if (v === true) return 'Sim'; if (v === false) return 'Não'; if (typeof v === 'string' && /^\s*[\[{]/.test(v)) { try { return valorCampo(JSON.parse(v)); } catch (e) { return v; } } if (Array.isArray(v)) return v.map(valorCampo).join('; '); if (typeof v === 'object' && v.s !== undefined && Object.keys(v).length <= 2) return v.s + (v.o ? ' — ' + v.o : ''); if (typeof v === 'object') return Object.keys(v).map(function (k) { return rotuloCampo(k) + ': ' + valorCampo(v[k]); }).join(' · '); return String(v); }
   function camposVisiveis(dados) { return Object.keys(dados || {}).filter(function (k) { return k.charAt(0) !== '_' && valorCampo(dados[k]) !== ''; }); }
   function grupoReg() {
     var g = {}; S.d.regs.forEach(function (r) { var k = chaveReg(r), x = g[k] || (g[k] = { chave: k, form: r.form, titulo: r.titulo, n: 0, ultimo: '', usuarios: {} }); x.n++; if (r.dia && r.dia > x.ultimo) x.ultimo = r.dia; if (r.usuario) x.usuarios[r.usuario] = 1; });
@@ -346,9 +346,10 @@
   function modoGraf(F) { return F.analito && !/^__/.test(F.analito) ? 'um' : (/^__/.test(F.analito || '') ? 'grupo' : 'todos'); }
   function pgCq() {
     var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false, tol: false });
+    if (F.fia) return pgFia();
     if (F.tol) return pgTol();
     var o = F.rel ? '<button class="voltar" data-cqvolta>← Voltar</button><div class="barra-doc topo"><h1>Relatório de controle analítico<small>Variação dos resultados</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>'
-      : topo('Controle analítico', 'Variação dos resultados: CDA × apoio e reanálise', '<button class="btn s" data-cqtol>⚖ Tolerância por analito</button><button class="btn" data-cqrel>🖨 Relatório</button>');
+      : topo('Controle analítico', 'Variação dos resultados: CDA × apoio e reanálise', '<button class="btn s" data-cqfia>FIA 100</button><button class="btn s" data-cqtol>⚖ Tolerância por analito</button><button class="btn" data-cqrel>🖨 Relatório</button>');
     o += '<div id="cq-box"><div class="vazio">Carregando…</div></div>';
     setTimeout(carregaCq, 20); return o;
   }
@@ -411,13 +412,131 @@
     out.textContent = 'Variação ' + (v > 0 ? '+' : '') + fmtN(v) + '% · ' + (fora ? 'FORA do limite' : 'dentro do limite') + ' (' + limiteTxt(t) + ')'; out.className = 'ap-var ' + (fora ? 'fora' : 'ok');
   }
 
+  /* ---------- Controle da Analisa FIA 100 (semanal) ---------- */
+  var FIA_PAD = { c1_min: 300, c1_max: 500, c2_min: 5000, c2_max: 8000, unidade: 'mIU/mL' };
+  function fiaFx() { return Object.assign({}, FIA_PAD, S.d.fiaFx || {}); }
+  function iniSemana(dia) { var d = new Date(dia + 'T12:00:00'), w = (d.getDay() + 6) % 7; return somaDias(dia, -w); }
+  function fiaDaSemana(dia) { var a = iniSemana(dia), b = somaDias(a, 6); return S.d.fia.filter(function (r) { return r.data >= a && r.data <= b; })[0]; }
+  function fiaFora(r) { var f = fiaFx(), a = Number(r.controle1), b = Number(r.controle2); return a < Number(f.c1_min) || a > Number(f.c1_max) || b < Number(f.c2_min) || b > Number(f.c2_max); }
+  function fmtMil(n) { return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 3 }); }
+  function cartaoFiaHoje(dia, pode) {
+    var fr = fiaDaSemana(dia), f = fiaFx();
+    return '<div class="vidro hj-it ' + (fr ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Controle da Analisa FIA 100 <span class="selo P" style="margin-left:6px">semanal</span></b><small>Faixa: controle 1 de ' + fmtMil(f.c1_min) + ' a ' + fmtMil(f.c1_max) + ' · controle 2 de ' + fmtMil(f.c2_min) + ' a ' + fmtMil(f.c2_max) + ' ' + h(f.unidade) + (fr ? ' · lançado em ' + MD.fmtData(fr.data) + (fr.registrado_por ? ' por ' + h(fr.registrado_por) : '') + (fiaFora(fr) ? ' · <b style="color:#dc2626">FORA da faixa</b>' : '') : ' · ainda não lançado nesta semana') + '</small></div>' +
+      (fr ? '<button class="btn s p" data-cqfia>Ver histórico</button>' : (pode ? '<button class="btn s" data-hjabrir="fia">Preencher</button>' : '')) +
+      (fr ? '' : '<div class="hj-form"><div class="hj-campos"><label class="cmp"><span>Controle 1 <i>(' + fmtMil(f.c1_min) + ' a ' + fmtMil(f.c1_max) + ')</i></span><input inputmode="decimal" id="fia-c1"></label><label class="cmp"><span>Controle 2 <i>(' + fmtMil(f.c2_min) + ' a ' + fmtMil(f.c2_max) + ')</i></span><input inputmode="decimal" id="fia-c2"></label><label class="cmp"><span>Observação / ação</span><input id="fia-obs"></label></div><div class="bt"><button class="btn" data-fiasalvar>Registrar</button></div></div>') + '</div>';
+  }
+  async function salvarFia() {
+    var dia = S.rdData || hoje(), a = numBR($('fia-c1').value), b = numBR($('fia-c2').value), obs = $('fia-obs').value.trim();
+    if (isNaN(a) || isNaN(b)) throw new Error('Informe o controle 1 e o controle 2.');
+    var reg = { data: dia, controle1: a, controle2: b, obs: obs, registrado_por: DB.user.nome };
+    if (fiaFora(reg) && !obs) throw new Error('Resultado fora da faixa: descreva a ação em "Observação / ação".');
+    await DB.saveFia(reg); DB.log('fia', dia + ' c1=' + a + ' c2=' + b); await carregar(); render(); toast('Controle da FIA 100 registrado.');
+  }
+  function svgFia(l, k, min, max, titulo) {
+    var d = l.filter(function (r) { return r[k] !== null && r[k] !== undefined; }).sort(function (a, b) { return a.data < b.data ? -1 : 1; }); if (!d.length) return '';
+    var W = 720, H = 170, pl = 52, pr = 12, pt = 12, pb = 24, t0 = Date.parse(d[0].data), t1 = Date.parse(d[d.length - 1].data), lo = Math.min(min, Math.min.apply(null, d.map(function (r) { return Number(r[k]); }))), hi = Math.max(max, Math.max.apply(null, d.map(function (r) { return Number(r[k]); }))), pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+    function xs(x) { return pl + (t1 === t0 ? (W - pl - pr) / 2 : (Date.parse(x) - t0) / (t1 - t0) * (W - pl - pr)); }
+    function ys(v) { return pt + (hi - v) / (hi - lo) * (H - pt - pb); }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto" role="img" aria-label="' + h(titulo) + '"><rect x="' + pl + '" y="' + ys(max) + '" width="' + (W - pl - pr) + '" height="' + (ys(min) - ys(max)) + '" fill="rgba(22,163,74,.13)"/>';
+    [min, max].forEach(function (g) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(g) + '" y2="' + ys(g) + '" stroke="#16a34a" stroke-dasharray="4 3" stroke-width=".8"/><text x="' + (pl - 6) + '" y="' + (ys(g) + 3) + '" font-size="10" text-anchor="end" fill="#64748b">' + fmtMil(g) + '</text>'; });
+    s += '<polyline fill="none" stroke="#0e9aa7" stroke-width="1.2" stroke-opacity=".7" points="' + d.map(function (r) { return xs(r.data).toFixed(1) + ',' + ys(Number(r[k])).toFixed(1); }).join(' ') + '"/>';
+    d.forEach(function (r) { var f = Number(r[k]) < min || Number(r[k]) > max; s += '<circle cx="' + xs(r.data).toFixed(1) + '" cy="' + ys(Number(r[k])).toFixed(1) + '" r="3.6" fill="' + (f ? '#dc2626' : '#16a34a') + '"><title>' + MD.fmtData(r.data) + ' · ' + fmtMil(r[k]) + '</title></circle>'; });
+    return s + '<text x="' + pl + '" y="' + (H - 6) + '" font-size="10" fill="#64748b">' + MD.fmtData(d[0].data) + '</text><text x="' + (W - pr) + '" y="' + (H - 6) + '" font-size="10" text-anchor="end" fill="#64748b">' + MD.fmtData(d[d.length - 1].data) + '</text></svg>';
+  }
+  function pgFia() {
+    var f = fiaFx(), l = S.d.fia.slice().sort(function (a, b) { return a.data < b.data ? 1 : -1; }), pode = DB.pode('aprovar');
+    var o = '<button class="voltar" data-fiavolta>← Voltar</button>' + topo('Controle da Analisa FIA 100', 'Lançamento semanal · controle 1 e controle 2', '<button class="btn" data-imprimir>🖨 Imprimir</button>');
+    o += '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Faixa aceitável</b> <span style="color:var(--mut);font-size:.78rem">(' + h(f.unidade) + ')</span><div class="hj-campos" style="margin-top:8px">' + [['c1_min', 'Controle 1 · mínimo'], ['c1_max', 'Controle 1 · máximo'], ['c2_min', 'Controle 2 · mínimo'], ['c2_max', 'Controle 2 · máximo']].map(function (c) { return pode ? '<label class="cmp"><span>' + c[1] + '</span><input data-fiafx="' + c[0] + '" value="' + h(f[c[0]]) + '"></label>' : '<div><small style="color:var(--mut)">' + c[1] + '</small><br><b>' + fmtMil(f[c[0]]) + '</b></div>'; }).join('') + '</div>' + (pode ? '<div class="bt" style="margin-top:8px"><button class="btn s p" data-fiafxsalvar>Salvar faixas</button></div>' : '') + '</div>';
+    if (!l.length) return o + '<div class="vazio">Nenhum lançamento ainda. Registre o primeiro em Registros do dia → O que preencher hoje.</div>';
+    o += '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Controle 1</b>' + svgFia(l, 'controle1', Number(f.c1_min), Number(f.c1_max), 'Controle 1') + '</div><div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Controle 2</b>' + svgFia(l, 'controle2', Number(f.c2_min), Number(f.c2_max), 'Controle 2') + '</div>';
+    o += '<div class="vidro pad" style="overflow:auto"><table class="tbl"><thead><tr><th>Data</th><th>Controle 1</th><th>Controle 2</th><th>Situação</th><th>Observação</th><th>Registrado por</th></tr></thead><tbody>' + l.map(function (r) { var fo = fiaFora(r); return '<tr><td>' + MD.fmtData(r.data) + '</td><td>' + fmtMil(r.controle1) + '</td><td>' + fmtMil(r.controle2) + '</td><td>' + (fo ? '<b style="color:#dc2626">FORA</b>' : 'OK') + '</td><td>' + h(r.obs || '') + '</td><td>' + h(r.registrado_por || '') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    return o;
+  }
+
+  /* ---------- Preencher formulário: todos os FR da Qualidade anterior ---------- */
+  function defForm(cod) { return window.Q2_FORMS.filter(function (f) { return f.c === cod; })[0]; }
+  function camposDe(f) { return f.modo === 'mensal' ? (f.cols || []) : (f.campos || []); }
+  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }]); }
+  function pgForms() {
+    var R = S.frm || (S.frm = { cod: '', q: '' });
+    if (R.cod === 'FIA') { R.cod = ''; S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false }; S.cq.fia = true; return pgFia(); }
+    if (R.cod) return pgFormPreencher();
+    var q = MD.esc(R.q || '').toLowerCase(), lista = catalogoForms().filter(function (f) { return !q || (f.c + ' ' + f.t + ' ' + f.cat).toLowerCase().indexOf(q) >= 0; }), cats = [];
+    lista.forEach(function (f) { if (cats.indexOf(f.cat) < 0) cats.push(f.cat); });
+    var o = topo('Preencher formulário', window.Q2_FORMS.length + 1 + ' formulários e controles', '');
+    o += '<div class="barra"><input id="fm-q" placeholder="Procurar formulário (código ou nome)…" value="' + h(R.q || '') + '"></div>';
+    cats.forEach(function (c) {
+      o += '<h2 class="sec">' + h(c) + '</h2><div class="cards anim">' + lista.filter(function (f) { return f.cat === c; }).map(function (f) {
+        var n = S.d.regs.filter(function (r) { return r.form === f.c; }).length;
+        return '<button class="vidro dc" data-frmabrir="' + h(f.c) + '"><span class="cd">' + h(f.c) + ' · ' + (f.modo === 'mensal' ? 'FOLHA DIÁRIA/MENSAL' : f.modo === 'fia' ? 'SEMANAL' : 'REGISTRO') + '</span><b>' + h(f.t) + '</b><span class="rod"><span>' + (f.modo === 'fia' ? S.d.fia.length : n) + ' registro' + ((f.modo === 'fia' ? S.d.fia.length : n) === 1 ? '' : 's') + '</span></span></button>';
+      }).join('') + '</div>';
+    });
+    return o;
+  }
+  function campoHtml(c) {
+    var lb = h(c.label) + (c.obrig ? ' <i class="obr">*</i>' : '') + (c.min != null || c.max != null ? ' <i>(' + (c.min != null ? c.min : '') + ' a ' + (c.max != null ? c.max : '') + ')</i>' : '');
+    var op = (c.opcoes || []).map(function (x) { return '<option>' + h(x) + '</option>'; }).join('');
+    if (c.tipo === 'check') return '<label class="hj-ck"><input type="checkbox" data-fv="' + c.id + '"> ' + h(c.label) + '</label>';
+    if (c.tipo === 'textarea') return '<label class="cmp fv-w"><span>' + lb + '</span><textarea data-fv="' + c.id + '" rows="3"></textarea></label>';
+    if (c.tipo === 'select') return '<label class="cmp"><span>' + lb + '</span><select data-fv="' + c.id + '"><option value="">—</option>' + op + '</select></label>';
+    if (c.tipo === 'multi') return '<div class="cmp fv-w"><span>' + lb + '</span><div class="fv-multi">' + (c.opcoes || []).map(function (x) { return '<label class="hj-ck"><input type="checkbox" data-fvm="' + c.id + '" value="' + h(x) + '"> ' + h(x) + '</label>'; }).join('') + '</div></div>';
+    if (c.tipo === 'grade') return '<div class="cmp fv-w"><span>' + lb + '</span><div style="overflow:auto"><table class="tbl"><thead><tr><th></th>' + c.colunas.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr></thead><tbody>' + c.linhas.map(function (l) { return '<tr><td><b>' + h(l) + '</b></td>' + c.colunas.map(function (k) { return '<td><input data-fvg="' + c.id + '" data-l="' + h(l) + '" data-k="' + h(k) + '" style="width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;font:inherit"></td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></div>';
+    if (c.tipo === 'checklist') return '<div class="cmp fv-w"><span>' + lb + '</span>' + c.grupos.map(function (g, gi) { return '<h4 class="fv-g">' + h(g.t) + '</h4>' + g.itens.map(function (it, ii) { var nm = 'ck-' + c.id + '-' + gi + '-' + ii; return '<div class="fv-ck"><span>' + h(it) + '</span><span class="fv-r">' + ['C', 'NC', 'NA'].map(function (v) { return '<label><input type="radio" name="' + nm + '" data-fvc="' + c.id + '" data-i="' + h(it) + '" value="' + v + '"> ' + v + '</label>'; }).join('') + '</span><input data-fvco="' + c.id + '" data-i="' + h(it) + '" placeholder="obs." style="min-width:140px;padding:5px 8px;border:1px solid var(--bd);border-radius:8px;font:inherit;font-size:.8rem"></div>'; }).join(''); }).join('') + '</div>';
+    var tp = c.tipo === 'data' ? 'date' : c.tipo === 'hora' ? 'time' : 'text', val = c.tipo === 'data' && c.id === 'data' ? ' value="' + hoje() + '"' : '';
+    return '<label class="cmp"><span>' + lb + '</span><input type="' + tp + '"' + (c.tipo === 'numero' ? ' inputmode="decimal"' : '') + val + ' data-fv="' + c.id + '"></label>';
+  }
+  function pgFormPreencher() {
+    var R = S.frm, f = defForm(R.cod); if (!f) { R.cod = ''; return pgForms(); }
+    var mens = f.modo === 'mensal', pode = DB.pode('escrever');
+    var o = '<button class="voltar" data-frmvolta>← Voltar aos formulários</button><div class="barra-doc topo"><h1>' + h(f.c) + '<small>' + h(f.t) + '</small></h1></div>';
+    if (!pode) return o + '<div class="vazio">Seu perfil é só de consulta: não é possível preencher formulários.</div>';
+    o += '<div class="vidro pad">' + (f.aviso ? '<p class="hj-av">' + h(f.aviso) + '</p>' : '') + (f.alerta ? '<p class="hj-av" style="background:#fee2e2;color:#991b1b">' + h(f.alerta.msg) + '</p>' : '');
+    o += '<div class="hj-campos" style="margin-bottom:12px"><label class="cmp"><span>Unidade</span><select id="fv-un"><option>Matriz</option><option>Mata Fria</option></select></label>' +
+      (mens ? '<label class="cmp"><span>Data</span><input type="date" id="fv-dia" value="' + hoje() + '" max="' + hoje() + '"></label>' + (f.itens && f.itens.length ? '<label class="cmp"><span>' + h(f.item_label || 'Item') + '</span><select id="fv-item">' + f.itens.map(function (x) { return '<option>' + h(x) + '</option>'; }).join('') + '</select></label>' : '') : '') + '</div>';
+    var cs = camposDe(f), curtos = cs.filter(function (c) { return ['check', 'numero', 'texto', 'data', 'hora', 'select'].indexOf(c.tipo) >= 0; }), longos = cs.filter(function (c) { return curtos.indexOf(c) < 0; });
+    o += '<div class="hj-campos">' + curtos.map(campoHtml).join('') + '</div>' + longos.map(campoHtml).join('');
+    o += '<div class="bt" style="margin-top:14px"><button class="btn" data-frmsalvar>Registrar</button></div></div>';
+    return o;
+  }
+  function lerForm(f) {
+    var cs = camposDe(f), dados = {}, fora = [], erros = [], root = document;
+    cs.forEach(function (c) {
+      var v;
+      if (c.tipo === 'check') { dados[c.id] = !!root.querySelector('[data-fv="' + c.id + '"]').checked; return; }
+      if (c.tipo === 'multi') { v = [].slice.call(root.querySelectorAll('[data-fvm="' + c.id + '"]:checked')).map(function (x) { return x.value; }); if (v.length) dados[c.id] = v; else if (c.obrig) erros.push(c.label); return; }
+      if (c.tipo === 'grade') { var g = {}, n = 0; [].slice.call(root.querySelectorAll('[data-fvg="' + c.id + '"]')).forEach(function (i) { var t = i.value.trim(); if (!t) return; (g[i.dataset.l] = g[i.dataset.l] || {})[i.dataset.k] = t; n++; }); if (n) dados[c.id] = g; else if (c.obrig) erros.push(c.label); return; }
+      if (c.tipo === 'checklist') { var ck = {}, m = 0; [].slice.call(root.querySelectorAll('[data-fvc="' + c.id + '"]:checked')).forEach(function (i) { var oel = root.querySelector('[data-fvco="' + c.id + '"][data-i="' + i.dataset.i.replace(/"/g, '\\"') + '"]'); ck[i.dataset.i] = { s: i.value, o: oel ? oel.value.trim() : '' }; m++; }); if (m) dados[c.id] = ck; else if (c.obrig) erros.push(c.label); return; }
+      var el = root.querySelector('[data-fv="' + c.id + '"]'); v = el ? el.value.trim() : '';
+      if (!v) { if (c.obrig) erros.push(c.label); return; }
+      if (c.tipo === 'numero') { var n2 = numBR(v); if (isNaN(n2)) { erros.push(c.label + ' (valor inválido)'); return; } dados[c.id] = n2; if ((c.min != null && n2 < c.min) || (c.max != null && n2 > c.max)) fora.push(c.label); return; }
+      dados[c.id] = v;
+    });
+    if (f.pontuacao) { var tot = 0; cs.forEach(function (c) { if (c.pts && dados[c.id] !== undefined) tot += c.pts[dados[c.id]] || 0; }); dados._pontuacao = tot; }
+    return { dados: dados, fora: fora, erros: erros };
+  }
+  async function salvarForm() {
+    var R = S.frm, f = defForm(R.cod); if (!f) return;
+    var r = lerForm(f); if (r.erros.length) throw new Error('Preencha: ' + r.erros.join(', ') + '.');
+    var mens = f.modo === 'mensal', un = $('fv-un').value, dia = mens ? $('fv-dia').value : (r.dados.data || hoje()), item = mens && $('fv-item') ? $('fv-item').value : '';
+    if (!dia) throw new Error('Informe a data.');
+    if (!mens && !r.dados.data) dia = hoje();
+    if (f.desvio === 'obs' && r.fora.length && !r.dados.obs) throw new Error('Fora da faixa: ' + r.fora.join(', ') + '. Descreva a ação em "Observações".');
+    if (mens && S.d.regs.some(function (x) { return x.origem === 'Registros' && x.form === f.c && x.item === item && (x.unidade || 'Matriz') === un && x.dia === dia; })) throw new Error('Este formulário já foi registrado para essa data, item e unidade.');
+    r.dados._chave = mens ? String(Number(dia.slice(8))) : ''; r.dados._versao = 'q2';
+    await DB.addRegistros([{ origem: 'Registros', form: f.c, titulo: f.c, unidade: un, periodo: mens ? dia.slice(0, 7) : dia, dia: dia, item: item, usuario: DB.user.nome, criado_em: new Date().toISOString(), dados: r.dados }]);
+    DB.log('registro', f.c + ' ' + item + ' ' + dia);
+    var av = f.alerta && r.dados[f.alerta.campo] && f.alerta.valores.indexOf(r.dados[f.alerta.campo]) >= 0 ? f.alerta.msg : '';
+    await carregar(); S.frm.cod = ''; render(); toast('Registrado: ' + f.c + ' · ' + f.t + '.'); if (av) setTimeout(function () { toast(av, 1); }, 600);
+  }
+
   /* ---------- O que preencher hoje (formulários de rotina diária) ---------- */
   function rotinaFeita(it, dia) { return S.d.regs.filter(function (r) { return r.origem === 'Registros' && r.form === it.form && r.item === it.item && (r.unidade || 'Matriz') === it.unidade && r.dia === dia; })[0]; }
   function tempsFeitas(dia) { var eq = S.d.equip; return { n: eq.filter(function (e) { return S.d.temps.some(function (t) { return t.equip_id === e.id && t.dia === dia; }); }).length, total: eq.length }; }
-  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n); }
+  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n) + (fiaDaSemana(dia) ? 0 : 1); }
   function pgHoje() {
     var dia = S.rdData || hoje(), tf = tempsFeitas(dia), o = '<div class="barra"><label class="hj-dt">Data do registro <input type="date" id="rd-data" value="' + dia + '" max="' + hoje() + '"></label><button class="btn s p" data-rdhoje>Hoje</button><span style="color:var(--mut);font-size:.8rem">Você pode lançar um dia que ficou para trás.</span></div><div class="hj-lista">';
     o += '<div class="vidro hj-it ' + (tf.total && tf.n >= tf.total ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Temperatura das geladeiras</b><small>' + (tf.total ? tf.n + ' de ' + tf.total + ' equipamentos registrados nesta data' : 'Nenhum equipamento cadastrado') + '</small></div><button class="btn s p" data-rdtab="temp">' + (tf.n >= tf.total ? 'Ver' : 'Registrar') + '</button></div>';
+    o += cartaoFiaHoje(dia, DB.pode('escrever'));
     window.Q2_ROTINA.forEach(function (it, i) {
       var f = rotinaFeita(it, dia), pode = DB.pode('escrever');
       o += '<div class="vidro hj-it ' + (f ? 'ok' : 'pend') + '" data-hjcard="' + i + '"><span class="hj-pt"></span><div class="hj-t"><b>' + h(it.t) + '</b><small>' + h(it.form) + ' · ' + h(it.item) + (it.unidade !== 'Matriz' ? ' · ' + h(it.unidade) : '') + (f ? ' · registrado por ' + h(f.usuario || '—') : '') + '</small></div>' +
@@ -520,7 +639,7 @@
     function aba(id, ic, t, d, extra) { return '<button type="button" class="vidro pad rd-card' + (tab === id ? ' on' : '') + '" data-rdtab="' + id + '"><span class="rd-ic">' + ic + '</span><b>' + t + (extra || '') + '</b><small>' + d + '</small></button>'; }
     var ph = pendHoje(S.rdData || hoje());
     o += '<div class="anim rd-tabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">' + aba('hoje', '✅', 'O que preencher hoje', 'Limpeza, temperatura e umidade, geladeiras', ph ? '<em class="rd-n">' + ph + '</em>' : '') + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') +
-      '<button type="button" class="vidro pad rd-card" data-ir="cq"><span class="rd-ic">◔</span><b>Variação dos resultados</b><small>Controle analítico: tabela, gráfico e relatório</small></button><button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
+      '<button type="button" class="vidro pad rd-card" data-ir="frm"><span class="rd-ic">✎</span><b>Outros formulários</b><small>Todos os formulários e controles da qualidade</small></button><button type="button" class="vidro pad rd-card" data-ir="cq"><span class="rd-ic">◔</span><b>Variação dos resultados</b><small>Controle analítico: tabela, gráfico e relatório</small></button><button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
     if (tab === 'hoje') o += pgHoje();
     else if (tab === 'apoio') o += '<div id="apoio-box"><div class="vazio">Carregando…</div></div>';
     else { o += '<div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>'; setTimeout(carregaTemp, 30); }
@@ -609,6 +728,13 @@
     if (t.closest('[data-regvolta]')) { S.reg = { chave: '', q: '', mes: '', id: null }; return render(); }
     if (t.closest('[data-regvolta2]')) { S.reg.id = null; S.reg.rel = false; return render(); }
     if (t.closest('[data-regrel]')) { S.reg.rel = true; S.reg.dias = 90; S.reg.id = null; return render(); }
+    if (t.closest('[data-cqfia]')) { S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false }; S.cq.fia = true; S.cq.tol = false; return irPara('cq'); }
+    if (t.closest('[data-fiavolta]')) { S.cq.fia = false; return render(); }
+    if (t.closest('[data-fiasalvar]')) { try { await salvarFia(); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-fiafxsalvar]')) { try { var fx = {}; [].slice.call(document.querySelectorAll('[data-fiafx]')).forEach(function (i) { var n = numBR(i.value); if (isNaN(n)) throw new Error('Faixa inválida.'); fx[i.dataset.fiafx] = n; }); if (fx.c1_min >= fx.c1_max || fx.c2_min >= fx.c2_max) throw new Error('O mínimo precisa ser menor que o máximo.'); fx.unidade = fiaFx().unidade; await DB.saveFiaFaixas(fx); S.d.fiaFx = Object.assign({ id: 1 }, fx); toast('Faixas salvas.'); render(); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-frmabrir]'))) { S.frm = { cod: a.dataset.frmabrir, q: '' }; return render(); }
+    if (t.closest('[data-frmvolta]')) { S.frm = { cod: '', q: '' }; return render(); }
+    if (t.closest('[data-frmsalvar]')) { try { await salvarForm(); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-cqtol]')) { S.cq.tol = true; return render(); }
     if (t.closest('[data-tolvolta]')) { S.cq.tol = false; return render(); }
     if ((a = t.closest('[data-tolsalvar]'))) { try { await salvarTol(a.dataset.tolsalvar); } catch (er) { toast(er.message, 1); } return; }
@@ -651,6 +777,7 @@
   });
   document.addEventListener('input', function (e) {
     if (e.target.dataset && e.target.dataset.api !== undefined && e.target.dataset.apid) varApoio(e.target);
+    if (e.target.id === 'fm-q') { S.frm = S.frm || { cod: '', q: '' }; S.frm.q = e.target.value; var p3 = e.target.selectionStart; render(); var n3 = $('fm-q'); if (n3) { n3.focus(); n3.setSelectionRange(p3, p3); } }
     if (e.target.id === 'rg-q') { S.reg.q = e.target.value; var pp = e.target.selectionStart; render(); var nn = $('rg-q'); if (nn) { nn.focus(); nn.setSelectionRange(pp, pp); } }
     if (e.target.id === 'f-q') { S.busca = e.target.value; var p = e.target.selectionStart; render(); var n = $('f-q'); if (n) { n.focus(); n.setSelectionRange(p, p); } }
   });
@@ -675,7 +802,7 @@
   async function iniciar() {
     try { await carregar(); } catch (e) { return telaLogin('Não foi possível carregar os dados: ' + e.message); }
     $('login').classList.add('oculto'); $('app').classList.remove('oculto');
-    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'regs', 'cq', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
+    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'frm', 'regs', 'cq', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
     render();
   }
   (async function () { try { var u = await DB.init(); if (!u && window.parent !== window && !DB.demo) { document.body.insertAdjacentHTML('beforeend', '<div id="sso-msg" style="position:fixed;inset:0;display:grid;place-items:center;background:#e9f6f5;color:#0b6b66;font:600 1rem sans-serif">Entrando com a sua conta do painel…</div>'); u = await DB.sso(); var m = document.getElementById('sso-msg'); if (m) m.remove(); } if (u) iniciar(); else telaLogin(DB.ssoMotivo ? 'Entrada automática não funcionou: ' + DB.ssoMotivo + (DB.armazenamentoOk() ? '' : ' · o navegador está bloqueando o armazenamento deste site dentro do painel.') : undefined); } catch (e) { var m2 = document.getElementById('sso-msg'); if (m2) m2.remove(); telaLogin(e.message); } })();
