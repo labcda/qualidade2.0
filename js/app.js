@@ -186,7 +186,7 @@
     var q = MD.esc(R.q || '').toLowerCase(), g = grupoReg().filter(function (x) { return !q || x.titulo.toLowerCase().indexOf(q) >= 0; });
     var o = topo('Formulários preenchidos', S.d.regs.length + ' registros guardados', '');
     o += '<div class="barra"><input id="rg-q" placeholder="Procurar formulário…" value="' + h(R.q || '') + '"></div>';
-    if (!S.d.regs.length) return o + '<div class="vazio">Ainda não há registros aqui. Rode o arquivo <b>sql/02_registros_migracao.sql</b> no Supabase para trazer os formulários da Qualidade anterior.</div>';
+    if (!S.d.regs.length) return o + '<div class="vazio">Ainda não há registros aqui. Rode o arquivo <b>sql/02_registros_migracao_v2.sql</b> no Supabase para trazer os formulários da Qualidade anterior.</div>';
     o += g.length ? '<div class="cards anim">' + g.map(function (x) { return '<button class="vidro dc" data-regg="' + h(x.chave) + '"><span class="cd">' + (x.form ? 'FORMULÁRIO' : 'REGISTRO') + '</span><b>' + h(x.titulo) + '</b><span class="rod"><span>' + x.n + ' registro' + (x.n > 1 ? 's' : '') + '</span>' + (x.ultimo ? '<span>último: ' + MD.fmtData(x.ultimo) + '</span>' : '') + '<span>' + Object.keys(x.usuarios).length + ' pessoa(s)</span></span></button>'; }).join('') + '</div>' : '<div class="vazio">Nenhum formulário encontrado.</div>';
     return o;
   }

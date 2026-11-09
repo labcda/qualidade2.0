@@ -33,4 +33,4 @@ sql/01_base.sql     tabelas, regras de acesso (RLS) e anexos
 Todos os documentos novos entram como **rascunho**; só o RT (perfil *aprova*) publica como vigente.
 
 ## Formulários preenchidos
-Rode `sql/02_registros_migracao.sql` no Supabase para copiar os registros da Qualidade anterior (formulários FR, controle analítico, checklists, tarefas, manutenções, ordens de serviço, calibrações, proficiências, contingência, fechamentos) e as temperaturas. Eles aparecem no menu **Formulários preenchidos**, comprovam os requisitos automaticamente e têm relatório imprimível. Abra o site com `?demo` para testar sem login.
+Rode `sql/02_registros_migracao_v2.sql` no Supabase para copiar os registros da Qualidade anterior (formulários FR, controle analítico, checklists, tarefas, manutenções, ordens de serviço, calibrações, proficiências, contingência, fechamentos) e as temperaturas. Eles aparecem no menu **Formulários preenchidos**, comprovam os requisitos automaticamente e têm relatório imprimível. Abra o site com `?demo` para testar sem login.
