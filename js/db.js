@@ -28,6 +28,8 @@
       return DB._perfil(s.user);
     },
     /* Entrada única: dentro do painel CDA (iframe), o painel entrega um token de uso único e o login do painel vale aqui também. */
+    ssoMotivo: '',
+    armazenamentoOk() { try { localStorage.setItem('q2_teste', '1'); localStorage.removeItem('q2_teste'); return true; } catch (e) { return false; } },
     sso() {
       return new Promise(function (res) {
         if (demo || window.parent === window) return res(null);
@@ -36,12 +38,12 @@
         function origemOk(o) { return /^https:\/\/([a-z0-9-]+\.)?painel-cda\.pages\.dev$/.test(o) || /^http:\/\/localhost:\d+$/.test(o); }
         async function on(e) {
           if (!origemOk(e.origin)) return; var m = e.data; if (!m || m.tipo !== 'q2-sso') return;
-          if (m.erro || !m.token_hash) return fim(null);
-          try { var r = await sb.auth.verifyOtp({ token_hash: m.token_hash, type: 'magiclink' }); if (r.error) throw r.error; fim(await DB._perfil(r.data.user)); } catch (er) { console.warn('[sso]', er); fim(null); }
+          if (m.erro || !m.token_hash) { DB.ssoMotivo = 'o painel respondeu: ' + (m.erro || 'sem token'); return fim(null); }
+          try { var r = await sb.auth.verifyOtp({ token_hash: m.token_hash, type: 'magiclink' }); if (r.error) throw r.error; fim(await DB._perfil(r.data.user)); } catch (er) { console.warn('[sso]', er); DB.ssoMotivo = 'não foi possível abrir a sessão (' + (er && er.message || er) + ')'; fim(null); }
         }
         window.addEventListener('message', on);
         try { window.parent.postMessage({ tipo: 'q2-pronto' }, '*'); } catch (e) { return fim(null); }
-        T = setTimeout(function () { fim(null); }, 9000);
+        T = setTimeout(function () { DB.ssoMotivo = 'o painel não respondeu em 9 segundos'; fim(null); }, 9000);
       });
     },
     async _perfil(u) {
