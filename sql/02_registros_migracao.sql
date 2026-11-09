@@ -48,12 +48,12 @@ begin
 exception when others then return null;
 end $$;
 
-create or replace function q2_num_seguro(t text) returns numeric language plpgsql immutable as $
+create or replace function q2_num_seguro(t text) returns numeric language plpgsql immutable as $$
 begin
   if t is null or btrim(t) = '' then return null; end if;
   return replace(btrim(t), ',', '.')::numeric;
 exception when others then return null;
-end $;
+end $$;
 
 create or replace function q2_json_seguro(t text) returns jsonb language plpgsql immutable as $$
 begin
