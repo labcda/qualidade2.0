@@ -296,7 +296,25 @@
       .filter(function (r) { return !r.anulado; });
   }
   function fmtN(n) { return isNaN(n) ? '' : String(Math.round(n * 100) / 100).replace('.', ','); }
-  function svgVariacao(l) {
+  var CORES_CQ = ['#0e9aa7', '#7c3aed', '#d97706', '#2563eb', '#db2777', '#059669', '#9333ea', '#ea580c', '#0891b2', '#65a30d', '#be123c', '#475569', '#ca8a04', '#4f46e5'];
+  function svgVariacao(l, multi) {
+    if (!multi) return svgVariacaoUm(l);
+    l = l.filter(function (r) { return !isNaN(r.v) && r.dia; }).sort(function (a, b) { return a.dia < b.dia ? -1 : 1; }); if (!l.length) return '';
+    var W = 720, H = 230, pl = 40, pr = 12, pt = 12, pb = 26, t0 = Date.parse(l[0].dia), t1 = Date.parse(l[l.length - 1].dia), tol = l[0].tol || CQ_TOL, M = Math.max(30, Math.ceil(tol * 3)), nomes = [];
+    l.forEach(function (r) { if (nomes.indexOf(r.analito) < 0) nomes.push(r.analito); });
+    function xs(d) { return pl + (t1 === t0 ? (W - pl - pr) / 2 : (Date.parse(d) - t0) / (t1 - t0) * (W - pl - pr)); }
+    function ys(v) { return pt + (M - Math.max(-M, Math.min(M, v))) / (2 * M) * (H - pt - pb); }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-width:100%" role="img" aria-label="Variação de todos os analitos ao longo do tempo"><rect x="' + pl + '" y="' + ys(tol) + '" width="' + (W - pl - pr) + '" height="' + (ys(-tol) - ys(tol)) + '" fill="rgba(22,163,74,.12)"/>';
+    [[tol, '+' + tol + '%'], [0, '0'], [-tol, '-' + tol + '%']].forEach(function (g) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + ys(g[0]) + '" y2="' + ys(g[0]) + '" stroke="' + (g[0] === 0 ? '#94a3b8' : '#16a34a') + '" stroke-dasharray="' + (g[0] === 0 ? '0' : '4 3') + '" stroke-width=".8"/><text x="' + (pl - 6) + '" y="' + (ys(g[0]) + 3) + '" font-size="10" text-anchor="end" fill="#64748b">' + g[1] + '</text>'; });
+    nomes.forEach(function (n, k) {
+      var cor = CORES_CQ[k % CORES_CQ.length], pts = l.filter(function (r) { return r.analito === n; });
+      s += '<polyline fill="none" stroke="' + cor + '" stroke-width="1.3" stroke-opacity=".75" points="' + pts.map(function (r) { return xs(r.dia).toFixed(1) + ',' + ys(r.v).toFixed(1); }).join(' ') + '"/>';
+      pts.forEach(function (r) { var fora = Math.abs(r.v) > r.tol; s += '<circle cx="' + xs(r.dia).toFixed(1) + '" cy="' + ys(r.v).toFixed(1) + '" r="' + (fora ? 4 : 3) + '" fill="' + cor + '"' + (fora ? ' stroke="#dc2626" stroke-width="2"' : '') + '><title>' + h(r.analito + ' · ' + MD.fmtData(r.dia) + ' · ' + fmtN(r.v) + '%') + '</title></circle>'; });
+    });
+    s += '<text x="' + pl + '" y="' + (H - 8) + '" font-size="10" fill="#64748b">' + MD.fmtData(l[0].dia) + '</text><text x="' + (W - pr) + '" y="' + (H - 8) + '" font-size="10" text-anchor="end" fill="#64748b">' + MD.fmtData(l[l.length - 1].dia) + '</text></svg>';
+    return s + '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:.78rem">' + nomes.map(function (n, k) { return '<span style="display:inline-flex;align-items:center;gap:5px"><i style="width:14px;height:4px;border-radius:2px;background:' + CORES_CQ[k % CORES_CQ.length] + '"></i>' + h(n) + '</span>'; }).join('') + '<span style="color:#dc2626">● contorno vermelho = fora da tolerância</span></div>';
+  }
+  function svgVariacaoUm(l) {
     l = l.filter(function (r) { return !isNaN(r.v) && r.dia; }).sort(function (a, b) { return a.dia < b.dia ? -1 : 1; }); if (!l.length) return '';
     var W = 720, H = 200, pl = 40, pr = 12, pt = 12, pb = 26, t0 = Date.parse(l[0].dia), t1 = Date.parse(l[l.length - 1].dia), tol = l[0].tol || CQ_TOL, M = Math.max(30, Math.ceil(tol * 3));
     function xs(d) { return pl + (t1 === t0 ? (W - pl - pr) / 2 : (Date.parse(d) - t0) / (t1 - t0) * (W - pl - pr)); }
@@ -319,7 +337,7 @@
   }
   function cqFiltrar(todos) {
     var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false }), de = F.per ? somaDias(hoje(), -F.per) : '';
-    return todos.filter(function (r) { return (!F.tipo || r.tipo === F.tipo) && (!F.analito || r.analito === F.analito) && (!de || r.dia >= de); });
+    return todos.filter(function (r) { var grupo = F.analito === '__HEMA__' ? r.tipo.indexOf('HEMA') === 0 : (F.analito === '__BIOQ__' ? r.tipo.indexOf('BIOQ') === 0 : true); return (!F.tipo || r.tipo === F.tipo) && (!F.analito || /^__/.test(F.analito) ? grupo : r.analito === F.analito) && (!de || r.dia >= de); });
   }
   function pgCq() {
     var F = S.cq || (S.cq = { tipo: '', per: 90, analito: '', rel: false });
@@ -337,13 +355,13 @@
       var corpo = '<div class="grade g4" style="margin-bottom:14px">' + [['Comparações', rs.n, '#0e9aa7'], ['Dentro de ±' + CQ_TOL + '%', rs.ok + ' (' + fmtN(rs.pct) + '%)', '#16a34a'], ['Fora da tolerância', rs.fora, rs.fora ? '#dc2626' : '#64748b'], ['Maior variação', fmtN(rs.max) + '%', '#d97706']].map(function (c) { return '<div class="vidro pad" style="border-left:5px solid ' + c[2] + '"><div style="font-size:1.5rem;font-weight:800;color:' + c[2] + '">' + c[1] + '</div><div style="color:var(--mut);font-size:.78rem;font-weight:700">' + c[0] + '</div></div>'; }).join('') + '</div>';
       if (F.rel) {
         var tipoTxt = F.tipo ? CQ_NOMES[F.tipo] || F.tipo : 'Todos os tipos', pr = F.per ? 'últimos ' + F.per + ' dias' : 'todo o período';
-        var c = '<p>Variação percentual entre o resultado do CDA e a referência (laboratório de apoio ou reanálise), com tolerância de ±' + CQ_TOL + '%. ' + h(tipoTxt) + (F.analito ? ' · ' + h(F.analito) : '') + ' · ' + pr + '. Emitido em ' + MD.fmtData(hoje()) + ' por ' + h(DB.user ? DB.user.nome : '') + '.</p>' +
-          '<table><thead><tr><th>Comparações</th><th>Dentro de ±' + CQ_TOL + '%</th><th>Fora da tolerância</th><th>Maior variação</th></tr></thead><tbody><tr><td>' + rs.n + '</td><td>' + rs.ok + ' (' + fmtN(rs.pct) + '%)</td><td>' + rs.fora + '</td><td>' + fmtN(rs.max) + '%</td></tr></tbody></table>' + svgVariacao(l) + cqTabela(l, 600);
+        var c = '<p>Variação percentual entre o resultado do CDA e a referência (laboratório de apoio ou reanálise), com tolerância de ±' + CQ_TOL + '%. ' + h(tipoTxt) + (F.analito ? ' · ' + h(F.analito === '__HEMA__' ? 'Hemograma completo' : F.analito === '__BIOQ__' ? 'Bioquímica completa' : F.analito) : '') + ' · ' + pr + '. Emitido em ' + MD.fmtData(hoje()) + ' por ' + h(DB.user ? DB.user.nome : '') + '.</p>' +
+          '<table><thead><tr><th>Comparações</th><th>Dentro de ±' + CQ_TOL + '%</th><th>Fora da tolerância</th><th>Maior variação</th></tr></thead><tbody><tr><td>' + rs.n + '</td><td>' + rs.ok + ' (' + fmtN(rs.pct) + '%)</td><td>' + rs.fora + '</td><td>' + fmtN(rs.max) + '%</td></tr></tbody></table>' + svgVariacao(l, /^__/.test(F.analito)) + cqTabela(l, 600);
         box.innerHTML = '<div class="fundo-folha">' + MD.folha({ codigo: 'CQ', titulo: 'Controle analítico · variação dos resultados', versao: '1', status: 'vigente', tipo: 'FR' }, c) + '</div>';
         return;
       }
-      var filtros = '<div class="barra"><select id="cq-tipo"><option value="">Todos os tipos</option>' + Object.keys(CQ_NOMES).map(function (k) { return '<option value="' + k + '"' + (F.tipo === k ? ' selected' : '') + '>' + CQ_NOMES[k] + '</option>'; }).join('') + '</select><select id="cq-per">' + [[30, 'Últimos 30 dias'], [90, 'Últimos 90 dias'], [180, 'Últimos 180 dias'], [365, 'Últimos 12 meses'], [0, 'Tudo']].map(function (p) { return '<option value="' + p[0] + '"' + (F.per === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select><select id="cq-an"><option value="">Todos os analitos</option>' + analitos.map(function (a) { return '<option' + (F.analito === a ? ' selected' : '') + '>' + h(a) + '</option>'; }).join('') + '</select></div>';
-      box.innerHTML = filtros + corpo + (l.length ? '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Variação ao longo do tempo</b><div style="color:var(--mut);font-size:.75rem;margin-bottom:6px">A faixa verde é a tolerância de ±' + CQ_TOL + '%. Pontos vermelhos estão fora.</div>' + svgVariacao(l) + '</div><div class="vidro pad" style="overflow:auto">' + cqTabela(l) + '</div>' : '<div class="vazio">Nenhum resultado neste filtro.</div>');
+      var filtros = '<div class="barra"><select id="cq-tipo"><option value="">Todos os tipos</option>' + Object.keys(CQ_NOMES).map(function (k) { return '<option value="' + k + '"' + (F.tipo === k ? ' selected' : '') + '>' + CQ_NOMES[k] + '</option>'; }).join('') + '</select><select id="cq-per">' + [[30, 'Últimos 30 dias'], [90, 'Últimos 90 dias'], [180, 'Últimos 180 dias'], [365, 'Últimos 12 meses'], [0, 'Tudo']].map(function (p) { return '<option value="' + p[0] + '"' + (F.per === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select><select id="cq-an"><option value="">Todos os analitos</option>' + (todos.some(function (r) { return r.tipo.indexOf('HEMA') === 0; }) ? '<option value="__HEMA__"' + (F.analito === '__HEMA__' ? ' selected' : '') + '>Hemograma · todos juntos no gráfico</option>' : '') + (todos.some(function (r) { return r.tipo.indexOf('BIOQ') === 0; }) ? '<option value="__BIOQ__"' + (F.analito === '__BIOQ__' ? ' selected' : '') + '>Bioquímica · todos juntos no gráfico</option>' : '') + analitos.map(function (a) { return '<option' + (F.analito === a ? ' selected' : '') + '>' + h(a) + '</option>'; }).join('') + '</select></div>';
+      box.innerHTML = filtros + corpo + (l.length ? '<div class="vidro pad" style="margin-bottom:14px"><b style="font-size:.9rem">Variação ao longo do tempo</b><div style="color:var(--mut);font-size:.75rem;margin-bottom:6px">A faixa verde é a tolerância de ±' + CQ_TOL + '%. Pontos vermelhos estão fora.</div>' + svgVariacao(l, /^__/.test(F.analito)) + '</div><div class="vidro pad" style="overflow:auto">' + cqTabela(l) + '</div>' : '<div class="vazio">Nenhum resultado neste filtro.</div>');
     } catch (e) { box = $('cq-box'); if (box) box.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; }
   }
   function varApoio(inp) {
