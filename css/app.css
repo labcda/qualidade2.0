@@ -191,3 +191,13 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 @media(max-width:820px){.lg-l{grid-template-columns:14px 1fr;row-gap:6px}.lg-s,.lg-m,.lg-a{grid-column:2;justify-content:flex-start}}
 .req .ev .tg.ok{background:#dcfce7;color:#166534}.req .ev .tg.ok:hover{background:#16a34a;color:#fff}
 .req .ev .tg small{font-weight:600;opacity:.8;margin-left:4px}
+
+/* aguardando retorno do apoio */
+.ap-card .ap-t{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.ap-card .ap-t b{display:block;font-size:1rem}.ap-card .ap-t small{color:var(--mut);font-size:.78rem}
+.ap-l{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(150px,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--bd)}
+.ap-a b{display:block;font-size:.9rem}.ap-a small{color:var(--mut);font-size:.74rem}
+.ap-v{display:flex;flex-direction:column;gap:3px;font-size:.72rem;color:var(--mut);font-weight:700}
+.ap-v input{padding:9px 10px;border:1px solid var(--bd);border-radius:10px;font:inherit;font-size:.9rem;width:100%;background:#fff}
+.ap-nf{display:flex;align-items:center;gap:6px;font-size:.76rem;color:var(--mut)}
+@media(max-width:720px){.ap-l{grid-template-columns:1fr 1fr}.ap-nf{grid-column:1 / -1}}

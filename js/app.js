@@ -289,9 +289,77 @@
     });
   }
 
+  /* ---------- aguardando retorno do apoio (digitar o que o laboratório de apoio devolveu) ---------- */
+  var CQ_TOL = 10;
+  function nomeTipoCq(t) { var s = String(t || '').toLowerCase().replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function nomeCqLongo(t) { return { HEMA_REPET: 'Hematologia · reanálise da amostra do dia anterior', HEMA_APOIO: 'Hematologia · confronto com laboratório de apoio', BIOQ_APOIO: 'Bioquímica · confronto com laboratório de apoio' }[t] || nomeTipoCq(t); }
+  function jsonSeg(s, pad) { try { return typeof s === 'string' ? JSON.parse(s || '') : (s || pad); } catch (e) { return pad; } }
+  function numBR(v) { var s = String(v === null || v === undefined ? '' : v).trim(); if (!s) return NaN; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s); }
+  function analitosUnicos(linhas) { var u = [], vis = {}; linhas.forEach(function (l) { if (!vis[l.analito]) { vis[l.analito] = 1; u.push(l.analito); } }); return u; }
+  async function carregaApoio() {
+    var box = $('apoio-box'); if (!box) return;
+    try {
+      var l = (await DB.pendentesApoio()).filter(function (r) { var st = (r.dados || {}).status; return st === 'PENDENTE' || st === 'PARCIAL'; }).sort(function (a, b) { return (a.dados.data || '') < (b.dados.data || '') ? -1 : 1; });
+      S.apoio = l; S.apRows = {}; box = $('apoio-box'); if (!box) return;
+      box.innerHTML = l.length ? l.map(cartaoApoio).join('') : '<div class="vazio">Nenhuma amostra aguardando o retorno do apoio.</div>';
+    } catch (e) { box = $('apoio-box'); if (box) box.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; }
+  }
+  function cartaoApoio(r) {
+    var d = r.dados || {}, labs = jsonSeg(d.labs_json, []), linhas = jsonSeg(d.linhas_json, []), feito = jsonSeg(d.feito_json, []), esp = Math.max(0, -(dias(d.data) || 0)), rep = d.tipo === 'HEMA_REPET', rows = [];
+    labs.forEach(function (lab) { analitosUnicos(linhas).forEach(function (an) { if (feito.indexOf(an + '|' + lab) < 0) rows.push({ analito: an, lab: lab }); }); });
+    S.apRows[r.id] = rows;
+    var corpo = rows.map(function (x, i) {
+      var l = linhas.filter(function (y) { return y.analito === x.analito; })[0] || {};
+      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Valor original' : 'Valor do CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small></div><label class="ap-v"><span>' + (rep ? 'Reanálise' : h(x.lab)) + '</span><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="valor"></label><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div>';
+    }).join('');
+    return '<div class="vidro pad ap-card" data-apcard="' + r.id + '" style="margin-bottom:14px"><div class="ap-t"><div><b>Amostra ' + h(d.amostra) + '</b><small>' + h(nomeCqLongo(d.tipo)) + ' · coletada em ' + MD.fmtData(d.data) + '</small></div><span class="selo ' + (esp > 7 ? 'N' : 'P') + '">há ' + esp + ' dia' + (esp === 1 ? '' : 's') + '</span></div>' +
+      (d.status === 'PARCIAL' ? '<p style="margin:0 0 8px;color:var(--mut);font-size:.8rem">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + (corpo || '<p>Tudo lançado.</p>') +
+      '<label class="cmp" style="margin-top:10px"><span>Ação corretiva (só se algum resultado ficar fora de ±' + CQ_TOL + '%)</span><input data-apacao="' + r.id + '"></label><div class="bt"><button class="btn p v" data-apcancel="' + r.id + '">Cancelar envio</button><button class="btn" data-apsalvar="' + r.id + '">Salvar retorno</button></div></div>';
+  }
+  async function salvarApoio(id) {
+    var r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
+    var d = r.dados || {}, labs = jsonSeg(d.labs_json, []), cda = jsonSeg(d.linhas_json, []), feito = jsonSeg(d.feito_json, []), rows = S.apRows[id] || [], card = document.querySelector('[data-apcard="' + id + '"]');
+    var novas = [], marca = [], naoFeitos = [];
+    rows.forEach(function (x, i) {
+      var inp = card.querySelector('[data-api="' + i + '"]'), nf = card.querySelector('[data-apnf="' + i + '"]'), v = inp ? inp.value.trim() : '';
+      if (nf && nf.checked) { marca.push(x.analito + '|' + x.lab); naoFeitos.push(x.analito + ' (' + x.lab + ')'); return; }
+      if (!v) return;
+      var n = numBR(v); if (isNaN(n)) throw new Error('Valor inválido em ' + x.analito + '.');
+      cda.filter(function (l) { return l.analito === x.analito; }).forEach(function (l) {
+        if (d.tipo === 'HEMA_REPET') novas.push({ analito: l.analito, equipamento: l.equipamento || '', lab_apoio: '', ref: numBR(l.valor_medido), med: n });
+        else novas.push({ analito: l.analito, equipamento: l.equipamento || '', lab_apoio: x.lab, ref: n, med: numBR(l.valor_medido) });
+      });
+      marca.push(x.analito + '|' + x.lab);
+    });
+    if (!marca.length) throw new Error('Digite ao menos um valor devolvido pelo apoio (ou marque o exame como "não feito").');
+    var acao = card.querySelector('[data-apacao="' + id + '"]').value.trim(), grupo = 'Q' + Date.now().toString(36).toUpperCase(), agora = new Date().toISOString(), fora = [], regs = [];
+    novas.forEach(function (n, i) {
+      if (isNaN(n.ref) || isNaN(n.med)) throw new Error('Valor inválido em ' + n.analito + '.');
+      if (n.ref === 0) throw new Error('O valor de referência de ' + n.analito + ' é zero: não dá para calcular a variação.');
+      var vr = Math.round(((n.med - n.ref) / n.ref * 100) * 100) / 100, ok = Math.abs(vr) <= CQ_TOL; if (!ok) fora.push(n.analito + ': ' + vr + '%');
+      regs.push({ origem: 'ControleAnalitico', form: '', titulo: 'Controle analítico · ' + nomeTipoCq(d.tipo), unidade: '', periodo: '', dia: d.data, item: n.analito, usuario: DB.user.nome, criado_em: agora,
+        dados: { id: 'CQ' + Date.now().toString(36).toUpperCase() + i, grupo: grupo, tipo: d.tipo, data: d.data, equipamento: n.equipamento, lab_apoio: n.lab_apoio, amostra: d.amostra, analito: n.analito, valor_ref: String(n.ref), valor_medido: String(n.med), variacao_pct: String(vr), tolerancia_pct: String(CQ_TOL), situacao: ok ? 'OK' : 'FORA', usuario: DB.user.nome, acao_corretiva: acao, observacao: 'Retorno do apoio em ' + hoje() + ' (lançamento ' + (d.id || '') + ')' + (naoFeitos.length ? ' - Não realizado pelo apoio: ' + naoFeitos.join(', ') : ''), registrado_em: agora, anulado: '', motivo_anulacao: '' } });
+    });
+    if (fora.length && !acao) throw new Error('Há ' + fora.length + ' resultado(s) fora de ±' + CQ_TOL + '% (' + fora.join('; ') + '). Descreva a ação corretiva.');
+    if (regs.length) await DB.addRegistros(regs);
+    var nf = feito.concat(marca), total = analitosUnicos(cda).length * labs.length, status = nf.length >= total ? 'CONCLUIDO' : 'PARCIAL';
+    await DB.updRegistro(r.id, { dados: Object.assign({}, d, { feito_json: JSON.stringify(nf), status: status, atualizado_em: agora }) });
+    DB.log('apoio', (d.id || '') + ' ' + marca.length + ' retorno(s) -> ' + status);
+    await carregar(); render(); toast(status === 'CONCLUIDO' ? 'Retorno salvo. Amostra concluída.' : 'Retorno salvo. Ainda faltam resultados desta amostra.');
+  }
+  async function cancelarApoio(id) {
+    var r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
+    var motivo = prompt('Por que este envio será cancelado? (fica registrado)'); if (!motivo || !motivo.trim()) return;
+    var d = r.dados || {};
+    await DB.updRegistro(r.id, { dados: Object.assign({}, d, { status: 'CANCELADO', observacao: ((d.observacao ? d.observacao + ' | ' : '') + 'Cancelado: ' + motivo.trim() + ' (por ' + DB.user.nome + ' em ' + hoje() + ')'), atualizado_em: new Date().toISOString() }) });
+    DB.log('apoio', (d.id || '') + ' cancelado'); await carregar(); render(); toast('Envio cancelado.');
+  }
+
   /* ---------- registros do dia ---------- */
   function pgRegistros() {
     var dia = S.rdia || hoje(), o = topo('Registros do dia', 'Rotina diária do laboratório');
+    o += '<h2 class="sec">Aguardando retorno do apoio</h2><div id="apoio-box"><div class="vazio">Carregando…</div></div>';
+    setTimeout(carregaApoio, 20);
     o += '<div class="grade g4 anim" style="margin-bottom:18px">' + [['🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente', 1], ['🧼', 'Limpeza e conservação', 'Em breve neste sistema; continua no painel atual', 0], ['🧪', 'Controle interno', 'Em breve neste sistema; continua no painel atual', 0], ['⚠️', 'Não conformidades', 'Em breve neste sistema; continua no painel atual', 0]].map(function (c) { return '<div class="vidro pad" style="' + (c[3] ? 'border-left:5px solid var(--tq)' : 'opacity:.7') + '"><div style="font-size:1.6rem">' + c[0] + '</div><b>' + c[1] + '</b><div style="color:var(--mut);font-size:.78rem;margin-top:4px">' + c[2] + '</div></div>'; }).join('') + '</div>';
     o += '<h2 class="sec">Temperaturas</h2><div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>';
     setTimeout(carregaTemp, 30); return o;
@@ -379,6 +447,8 @@
     if (t.closest('[data-regvolta]')) { S.reg = { chave: '', q: '', mes: '', id: null }; return render(); }
     if (t.closest('[data-regvolta2]')) { S.reg.id = null; S.reg.rel = false; return render(); }
     if (t.closest('[data-regrel]')) { S.reg.rel = true; S.reg.dias = 90; S.reg.id = null; return render(); }
+    if ((a = t.closest('[data-apsalvar]'))) { try { await salvarApoio(a.dataset.apsalvar); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-apcancel]'))) { try { await cancelarApoio(a.dataset.apcancel); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-imprimir]')) return window.print();
     if (t.closest('[data-busca]')) return busca();
     if (t.closest('[data-menu]')) return $('side').classList.toggle('aberto');

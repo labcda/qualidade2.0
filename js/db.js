@@ -136,6 +136,19 @@
       return q(f.order('dia').limit(5000));
     },
 
+    async pendentesApoio() {
+      if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'CQPendentes'; });
+      return q(sb.from('q2_registros').select('*').eq('origem', 'CQPendentes').order('dia'));
+    },
+    async addRegistros(lista) {
+      if (demo) { var b = banco(); b.regs = b.regs || []; lista.forEach(function (r) { r.id = b.regs.reduce(function (m, x) { return Math.max(m, x.id || 0); }, 0) + 1; b.regs.push(r); }); sv(b); return; }
+      for (var k = 0; k < lista.length; k += 50) await q(sb.from('q2_registros').insert(lista.slice(k, k + 50)));
+    },
+    async updRegistro(id, patch) {
+      if (demo) { var b = banco(), i = (b.regs || []).findIndex(function (x) { return x.id === id; }); if (i >= 0) b.regs[i] = Object.assign(b.regs[i], patch); sv(b); return; }
+      return q(sb.from('q2_registros').update(patch).eq('id', id));
+    },
+
     /* ----- usuários ----- */
     async perfis() { if (demo) return ok([{ id: 'demo', nome: st.user.nome, email: 'demo@local', papel: st.user.papel, ativo: true }]); return q(sb.from('q2_perfis').select('*').order('nome')); },
     async savePerfil(p) { if (demo) return p; return q(sb.from('q2_perfis').update({ nome: p.nome, papel: p.papel, ativo: p.ativo }).eq('id', p.id)); },
