@@ -167,14 +167,14 @@ const MAO = {
 - Quadro de assinaturas de elaboração, revisão e aprovação/liberação, montado pelo sistema com a assinatura eletrônica cadastrada de cada responsável, a data e a versão assinada.`,
     '5.5': `- O autor elabora o documento no sistema (situação "Rascunho"); um segundo profissional o revisa (situação "Em revisão"); a Diretoria (ou o Responsável Técnico, quando delegado) o aprova e libera (situação "Vigente").
 - Cada etapa só pode ser concluída por usuário com o perfil correspondente (elabora, revisa, aprova) e fica registrada com nome, data, hora e assinatura eletrônica.
-- Após a aprovação, a Lista Mestra é atualizada automaticamente e a versão anterior passa para "Obsoleto", mantida no sistema para consulta histórica.
-- O documento aprovado só é alterado por uma nova versão; o sistema não permite editar a versão vigente.`
+- Após a aprovação, a Lista Mestra reflete a versão vigente e a versão anterior fica arquivada no histórico de versões do documento, para consulta.
+- O documento vigente só é alterado por meio de uma nova versão, que volta ao fluxo de elaboração, revisão e aprovação; cada edição guarda a versão anterior no histórico.`
   },
   'PQ 002': {
     3: `- Documento controlado: documento do Sistema da Qualidade com código, versão e aprovação eletrônica, disponível em sua versão vigente no sistema (Qualidade 2.0).
 - Dado controlado: informação do Sistema da Qualidade (tabelas, registros e formulários preenchidos) cuja alteração e disponibilidade são controladas pelo sistema.
 - Lista Mestra: relação de todos os documentos do Sistema da Qualidade, com código, versão, data de revisão e situação, gerada pelo sistema.
-- Documento obsoleto: versão substituída, que deixa de aparecer como vigente e permanece no sistema para consulta histórica.
+- Documento obsoleto: versão substituída, que deixa de ser a vigente e permanece no histórico de versões do sistema para consulta.
 - Assinatura eletrônica: registro da pessoa que elaborou, revisou ou aprovou o documento, com assinatura cadastrada, data e hora.`,
     4: `- Diretor do Laboratório: analisar criticamente, aprovar e liberar os documentos e suas revisões, com assinatura eletrônica.
 - Supervisor de Qualidade: manter a Lista Mestra e o cadastro de assinaturas, acompanhar os prazos de revisão e verificar o uso apenas da versão vigente.
@@ -182,8 +182,8 @@ const MAO = {
     5: `- Os documentos e dados do CDA Laboratório são elaborados, revisados e aprovados dentro do sistema (Qualidade 2.0); a redação final é aprovada e liberada pelo Diretor do Laboratório ou pelo Responsável Técnico, com assinatura eletrônica.
 - A versão vigente de cada documento está disponível a todos os usuários autorizados em todos os locais de utilização, por meio do sistema.
 - As revisões e substituições são submetidas à análise crítica do aprovador antes de entrar em vigor. O sistema registra quem elaborou, revisou e aprovou, e quando.
-- A revisão é feita no máximo a cada 12 meses ou a qualquer tempo, quando houver mudança de norma, de processo ou de resultado de auditoria. O sistema indica os documentos com revisão próxima do vencimento.
-- Quando uma nova versão é aprovada, a anterior passa para "Obsoleto" automaticamente, deixando de ser exibida como vigente. As versões obsoletas ficam guardadas no sistema por, no mínimo, 5 anos, para consulta histórica.
+- A revisão é feita no máximo a cada 12 meses ou a qualquer tempo, quando houver mudança de norma, de processo ou de resultado de auditoria. A data da próxima revisão de cada documento fica registrada no sistema e é acompanhada pelo Supervisor de Qualidade.
+- Quando uma nova versão é aprovada, a anterior é arquivada no histórico de versões do documento e deixa de ser exibida como vigente. As versões anteriores ficam guardadas no sistema por, no mínimo, 5 anos, para consulta histórica.
 - A natureza de cada revisão é registrada no histórico do documento, para subsidiar a análise crítica e a aprovação.
 - Impressões são feitas por meio do relatório de impressão do sistema, que identifica o documento como cópia controlada, com a data e a hora de emissão. Cópias impressas não são arquivadas nos setores.
 - Acesso: leitura para todos os usuários cadastrados; elaboração, revisão e aprovação conforme o perfil de cada um. O sistema registra os acessos que alteram documentos.
@@ -281,6 +281,20 @@ function insereForms(d, t) {
   var L = linhas(t); L.splice(s[1], 0, b); return L.join('\n');
 }
 
+/* ---------- 7. requisitos de referência (DICQ, ISO 15189, ONA): conteúdo em tools/reforco/*.js ---------- */
+const REFORCO = {};
+fs.readdirSync(path.join(__dirname, 'reforco')).filter(function (f) { return f.slice(-3) === '.js'; }).sort().forEach(function (f) { Object.assign(REFORCO, require(path.join(__dirname, 'reforco', f))); });
+function reforco(d, t) {
+  var x = REFORCO[d.codigo]; if (!x) return t;
+  var NL = String.fromCharCode(10);
+  var b = ['### Requisitos de referência (DICQ, ISO 15189 e ONA)', '**Base normativa:** ' + x.n + '.', '', '**O que é exigido e como o CDA atende**', ''].concat(x.e.map(function (l) { return '- ' + l; })).concat(['']).concat(x.i ? ['**Monitoramento (ONA nível 2):** ' + x.i, ''] : []).concat(x.d ? ['**Quando houver desvio:** ' + x.d] : []).join(NL);
+  var L = linhas(t), i = L.findIndex(function (l) { return l.indexOf('## 6 ') === 0; });
+  if (i < 0) i = L.findIndex(function (l) { return l.indexOf('## 7 ') === 0; });
+  if (i < 0) { L.push('', b); } else L.splice(i, 0, b);
+  t = L.join(NL);
+  var cab = '## 7 Referências' + NL, j = t.indexOf(cab); if (j >= 0) t = t.slice(0, j) + cab + NL + '- ' + x.n + '.' + t.slice(j + cab.length);
+  return t;
+}
 /* ---------- execução ---------- */
 const vistos = {}, saida = [];
 DOCS.forEach(function (d) {
@@ -291,7 +305,7 @@ DOCS.forEach(function (d) {
   t = tabelaRegistros(t);
   t = frases(d, t);
   t = historico(d, t);
-  if (d.tipo !== 'FR') { t = insereForms(d, t); t = anexos(d, t); }
+  if (d.tipo !== 'FR') { t = reforco(d, t); t = insereForms(d, t); t = anexos(d, t); }
   t = t.replace(/\n{3,}/g, '\n\n').trim();
   var n = Object.assign({}, d, { texto: t, origem: 'Biblioteca CDA 11/2026 · reescrita no sistema' });
   saida.push(n);

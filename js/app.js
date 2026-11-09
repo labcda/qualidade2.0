@@ -10,7 +10,7 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-09a';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-09b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || [];
@@ -167,8 +167,9 @@
     });
   }
   async function mudarSit(d, st) {
+    if (st === 'vigente' && !DB.pode('aprovar')) return toast('Somente quem tem perfil de aprovação (Responsável Técnico ou Diretoria) libera um documento como vigente.', 1);
     var n = { id: d.id, status: st }; if (st === 'em_revisao') { n.data_revisao = hoje(); n.revisor = d.revisor || ''; }
-    if (st === 'vigente') { n.aprovador = DB.user.nome; n.data_vigencia = hoje(); var p = new Date(); p.setFullYear(p.getFullYear() + 2); n.proxima_revisao = p.toISOString().slice(0, 10); }
+    if (st === 'vigente') { n.aprovador = DB.user.nome; n.data_vigencia = hoje(); var p = new Date(); p.setFullYear(p.getFullYear() + 1); n.proxima_revisao = p.toISOString().slice(0, 10); }
     try { await DB.addVersao({ doc_id: d.id, versao: d.versao, status: st, texto: d.texto, autor: DB.user.nome, motivo: 'Situação: ' + MD.ST[st] }); await DB.saveDoc(Object.assign({}, d, n)); await carregar(); render(); toast('Situação atualizada: ' + MD.ST[st]); } catch (e) { toast(e.message, 1); }
   }
   async function novaVersao(d) {
