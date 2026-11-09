@@ -187,6 +187,17 @@
     },
 
     /* ----- usuários ----- */
+    /* ----- não conformidades, incidentes e eventos adversos ----- */
+    async ncs() {
+      if (demo) return banco().ncs || [];
+      try { return await q(sb.from('q2_nc').select('*').order('criado_em', { ascending: false })); } catch (e) { console.warn('[nc]', e.message || e); return null; }
+    },
+    async saveNc(r) {
+      r.atualizado_em = new Date().toISOString();
+      if (demo) { var b = banco(); b.ncs = b.ncs || []; var i = b.ncs.findIndex(function (x) { return x.id === r.id; }); if (i < 0) { r.id = uid(); r.criado_em = r.atualizado_em; b.ncs.unshift(r); } else b.ncs[i] = Object.assign(b.ncs[i], r); sv(b); return r; }
+      var row = Object.assign({}, r); if (!row.id) delete row.id;
+      return q(sb.from('q2_nc').upsert(row, { onConflict: 'id' }).select().single());
+    },
     /* ----- indicadores (definições, metas e valores mensais) ----- */
     async indicadores() {
       if (demo) { var b = banco(); if (!b.indDef) { b.indDef = JSON.parse(JSON.stringify(window.Q2_IND_DEF || [])); b.indVal = (window.Q2_IND_VAL || []).map(function (v, i) { return Object.assign({ id: 'iv' + i }, v); }); sv(b); } return { defs: b.indDef, vals: b.indVal }; }

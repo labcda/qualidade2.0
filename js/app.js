@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '' }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-09a';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || '';
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || [];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -53,18 +53,18 @@
   function contagem(lista) { var o = { A: 0, P: 0, N: 0, NA: 0, F: 0, t: 0, sem: 0 }; lista.forEach(function (r) { var x = resp(r); o.t++; if (x.f && x.v !== 'A') o.F++; else o[x.v]++; if (!prova(r).ok && x.v !== 'NA' && !x.f) o.sem++; }); return o; }
 
   /* ---------- estrutura ---------- */
-  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['frm', '✎', 'Preencher formulário'], ['regs', '▦', 'Formulários preenchidos'], ['cq', '◔', 'Controle analítico'], ['ind', '▥', 'Indicadores'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
+  var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['frm', '✎', 'Preencher formulário'], ['regs', '▦', 'Formulários preenchidos'], ['nc', '⚑', 'Não conformidades'], ['cq', '◔', 'Controle analítico'], ['ind', '▥', 'Indicadores'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
   function irPara(p, extra) { S.pg = p; if (extra) Object.assign(S, extra); if (p !== 'docs') S.docId = null; render(); window.scrollTo(0, 0); $('side').classList.remove('aberto'); history.replaceState(null, '', '#' + p); }
   function menu() {
     var u = DB.user, pend = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).length;
     $('side').innerHTML = '<div class="marca"><img src="img/logo-cda.png" alt="CDA"><div><b>Qualidade 2.0</b><small>Laboratório CDA</small></div></div>' +
-      MENU.map(function (m, i) { return (i === 9 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
+      MENU.map(function (m, i) { return (i === 10 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
       '<div class="eu"><div class="av">' + h((u.nome || '?').charAt(0).toUpperCase()) + '</div><div><b>' + h(u.nome) + '</b><small>' + h(({ admin: 'Administrador', elabora: 'Elabora', revisa: 'Revisa', aprova: 'Aprova', consulta: 'Consulta' })[u.papel]) + (DB.demo ? ' · demonstração' : '') + '</small></div><button data-sair>Sair</button></div>';
   }
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
   function render() {
     menu(); var m = $('main');
-    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, frm: pgForms, regs: pgRegs, cq: pgCq, ind: pgInd, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
+    var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, frm: pgForms, regs: pgRegs, cq: pgCq, nc: pgNc, ind: pgInd, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
     m.innerHTML = f();
     if (S.pg === 'inicio') requestAnimationFrame(function () { document.querySelectorAll('.bar i[data-w]').forEach(function (e) { e.style.width = e.dataset.w + '%'; }); var a = $('anelc'); if (a) a.style.strokeDashoffset = a.dataset.off; });
   }
@@ -476,6 +476,85 @@
     return o;
   }
 
+  /* ---------- Não conformidades, incidentes e eventos adversos (substitui FR 006 e FR 038) ---------- */
+  var NC_TIPO = { nc: 'Não conformidade', evento: 'Incidente / evento adverso', near: 'Near miss', never: 'Never event' };
+  var NC_ST = { aberta: 'Aberta', em_analise: 'Em análise', em_acao: 'Ações em andamento', verificacao: 'Verificação de eficácia', encerrada: 'Encerrada' };
+  var NC_PROX = { aberta: 'em_analise', em_analise: 'em_acao', em_acao: 'verificacao', verificacao: 'encerrada' };
+  var NC_ORIGEM = ['Reclamação de clientes', 'Padrões não conformes', 'Auditoria', 'Colaborador', 'Equipamentos não conformes', 'Pesquisa de satisfação', 'CEQ', 'CIQ', 'Incidente / evento adverso', 'Visita técnica do NSP', 'Outros'];
+  var NC_GRAV = ['Sem dano (incidente)', 'Dano leve', 'Dano moderado', 'Dano grave', 'Óbito'];
+  var NC_CAUSA = ['Processos', 'Matéria-prima', 'Mão de obra', 'Equipamentos', 'Ambiente', 'Outros'];
+  function ncNumero() { var y = new Date().getFullYear(), n = 0; S.d.nc.forEach(function (x) { var m = /(\d{4})-(\d+)$/.exec(x.numero || ''); if (m && Number(m[1]) === y) n = Math.max(n, Number(m[2])); }); return 'OC ' + y + '-' + String(n + 1).padStart(3, '0'); }
+  function ncAtraso(r) { return r.status !== 'encerrada' && (r.acoes || []).some(function (x) { return !x.feita && x.quando && x.quando < hoje(); }); }
+  function ncHist(r, texto) { r.historico = (r.historico || []).concat([{ quando: new Date().toISOString(), quem: DB.user.nome, texto: texto }]); }
+  function ncBadge(r) { return '<span class="selo ' + (r.status === 'encerrada' ? 'A' : ncAtraso(r) ? 'N' : 'P') + '">' + NC_ST[r.status] + (ncAtraso(r) ? ' · prazo vencido' : '') + '</span>'; }
+  function pgNc() {
+    var I = S.nc || (S.nc = { id: null, novo: false, f: 'abertas', ft: '' }), pode = DB.pode('escrever');
+    if (S.d.ncErro) return topo('Não conformidades', 'Ocorrências, análise e ações', '') + '<div class="vazio">A tabela de ocorrências ainda não existe no banco. Rode o arquivo <b>sql/09_nao_conformidades.sql</b> no SQL Editor do Supabase e recarregue.</div>';
+    if (I.novo) return ncFormNovo(I);
+    if (I.rel && I.id) { var rr = S.d.nc.filter(function (x) { return x.id === I.id; })[0]; if (rr) return ncRel(rr); }
+    if (I.id) { var r = S.d.nc.filter(function (x) { return x.id === I.id; })[0]; if (r) return ncDetalhe(r, I); I.id = null; }
+    var lista = S.d.nc.filter(function (x) { return (I.f === 'todas' || (I.f === 'encerradas' ? x.status === 'encerrada' : x.status !== 'encerrada')) && (!I.ft || x.tipo === I.ft); });
+    var abertas = S.d.nc.filter(function (x) { return x.status !== 'encerrada'; }), atras = S.d.nc.filter(ncAtraso);
+    var o = topo('Não conformidades e eventos', 'Registro, análise da causa, plano de ação e verificação de eficácia', pode ? '<button class="btn" data-ncnovo>＋ Nova ocorrência</button>' : '');
+    o += '<div class="grade g4" style="margin-bottom:14px">' + [['Abertas', abertas.length, '#0e9aa7'], ['Com prazo vencido', atras.length, atras.length ? '#dc2626' : '#16a34a'], ['Encerradas', S.d.nc.length - abertas.length, '#16a34a'], ['Total', S.d.nc.length, '#64748b']].map(function (k) { return '<div class="vidro pad kpi"><span style="color:' + k[2] + '">' + k[1] + '</span><small>' + k[0] + '</small></div>'; }).join('') + '</div>';
+    o += '<div class="barra"><div class="chips">' + [['abertas', 'Em aberto'], ['encerradas', 'Encerradas'], ['todas', 'Todas']].map(function (c) { return '<button class="chip' + (I.f === c[0] ? ' on' : '') + '" data-ncf="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div><select id="nc-ftipo"><option value="">Todos os tipos</option>' + Object.keys(NC_TIPO).map(function (k) { return '<option value="' + k + '"' + (I.ft === k ? ' selected' : '') + '>' + NC_TIPO[k] + '</option>'; }).join('') + '</select></div>';
+    if (!lista.length) return o + '<div class="vazio">' + (S.d.nc.length ? 'Nenhuma ocorrência neste filtro.' : 'Nenhuma ocorrência registrada. Toda não conformidade, incidente ou evento adverso é registrado aqui por quem o identificou.') + '</div>';
+    return o + '<div class="vidro pad" style="overflow:auto"><table><thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Setor</th><th>Descrição</th><th>Situação</th><th></th></tr></thead><tbody>' + lista.map(function (x) { return '<tr><td><b>' + h(x.numero) + '</b></td><td>' + h(NC_TIPO[x.tipo] || x.tipo) + '</td><td>' + MD.fmtData(x.data) + '</td><td>' + h(x.setor || '') + '</td><td>' + h((x.descricao || '').slice(0, 90)) + ((x.descricao || '').length > 90 ? '…' : '') + '</td><td>' + ncBadge(x) + '</td><td><button class="btn s" data-ncabrir="' + h(x.id) + '">Abrir</button></td></tr>'; }).join('') + '</tbody></table></div>';
+  }
+  function ncFormNovo(I) {
+    var opt = function (l, sel) { return l.map(function (x) { return '<option value="' + h(x.v || x) + '"' + ((x.v || x) === sel ? ' selected' : '') + '>' + h(x.t || x) + '</option>'; }).join(''); };
+    return '<button class="voltar" data-ncvolta>← Voltar</button>' + topo('Nova ocorrência', 'Substitui os formulários FR 006 (não conformidade) e FR 038 (incidente e evento adverso)', '') +
+      '<div class="vidro pad"><div class="hj-campos"><label class="cmp"><span>Tipo <i class="obr">*</i></span><select id="nc-tipo">' + opt(Object.keys(NC_TIPO).map(function (k) { return { v: k, t: NC_TIPO[k] }; }), I.tipo || 'nc') + '</select></label><label class="cmp"><span>Data da ocorrência <i class="obr">*</i></span><input type="date" id="nc-data" value="' + hoje() + '" max="' + hoje() + '"></label><label class="cmp"><span>Unidade</span><select id="nc-un"><option>Matriz</option><option>Mata Fria</option></select></label><label class="cmp"><span>Setor <i class="obr">*</i></span><input id="nc-setor" placeholder="Ex.: Recepção, Coleta, Hematologia"></label><label class="cmp"><span>Origem <i class="obr">*</i></span><select id="nc-origem">' + opt(NC_ORIGEM) + '</select></label><label class="cmp"><span>Houve impacto para o paciente?</span><select id="nc-imp"><option>Não</option><option>Sim</option></select></label><label class="cmp"><span>Gravidade (incidentes e eventos)</span><select id="nc-grav"><option value="">—</option>' + opt(NC_GRAV) + '</select></label></div>' +
+      '<label class="cmp fv-w"><span>Descrição do que aconteceu <i class="obr">*</i></span><textarea id="nc-desc" rows="4"></textarea></label><label class="cmp fv-w"><span>Correção imediata (o que foi feito na hora)</span><textarea id="nc-corr" rows="2"></textarea></label>' +
+      '<p class="hj-av" style="margin-top:12px">Você está registrando como <b>' + h(DB.user.nome) + '</b>. Cada pessoa registra as suas ocorrências com o próprio login; avisar a chefia ou o NSP verbalmente não substitui o registro.</p><div class="bt" style="margin-top:12px"><button class="btn" data-ncsalvarnovo>Registrar ocorrência</button></div></div>';
+  }
+  async function ncSalvarNovo() {
+    var v = function (id) { return $(id).value.trim(); }; if (!v('nc-data') || !v('nc-setor') || !v('nc-desc')) throw new Error('Preencha data, setor e a descrição do que aconteceu.');
+    var r = { numero: ncNumero(), tipo: v('nc-tipo'), data: v('nc-data'), unidade: v('nc-un'), setor: v('nc-setor'), origem: v('nc-origem'), descricao: v('nc-desc'), impacto: v('nc-imp') === 'Sim', gravidade: v('nc-grav'), correcao: v('nc-corr'), aberto_por: DB.user.nome, status: 'aberta', causa_tipo: [], causa: '', acoes: [], notivisa: '', eficacia: '', historico: [] };
+    ncHist(r, 'Ocorrência registrada');
+    var salvo; try { salvo = await DB.saveNc(r); } catch (e) { if (/duplicate|unique/i.test(e.message || '')) { await carregar(); r.numero = ncNumero(); salvo = await DB.saveNc(r); } else throw e; }
+    DB.log('ocorrencia', r.numero); await carregar(); S.nc = { id: salvo.id, novo: false, f: 'abertas', ft: '' }; render(); toast('Ocorrência ' + r.numero + ' registrada.');
+    if (r.tipo === 'never' || r.gravidade === 'Óbito' || r.gravidade === 'Dano grave') setTimeout(function () { toast('Evento grave: notificar o NOTIVISA em até 72 h e abrir a investigação (FR 045 / PQ 070).', 1); }, 700);
+  }
+  function ncDetalhe(r, I) {
+    var pode = DB.pode('escrever'), fecha = DB.pode('aprovar'), enc = r.status === 'encerrada', ed = pode && !enc, evt = r.tipo !== 'nc';
+    var o = '<button class="voltar" data-ncvolta>← Voltar à lista</button><div class="barra-doc topo"><h1>' + h(r.numero) + '<small>' + h(NC_TIPO[r.tipo] || r.tipo) + ' · ' + MD.fmtData(r.data) + ' · ' + h(r.setor || '') + '</small></h1><button class="btn" data-ncrel>🖨 Relatório</button></div>';
+    var etapas = ['aberta', 'em_analise', 'em_acao', 'verificacao', 'encerrada'], at = etapas.indexOf(r.status);
+    o += '<div class="nc-passos">' + etapas.map(function (e, i) { return '<span class="' + (i < at ? 'feito' : i === at ? 'atual' : '') + '">' + NC_ST[e] + '</span>'; }).join('') + '</div>';
+    if (r.tipo === 'never' || r.gravidade === 'Óbito' || r.gravidade === 'Dano grave') o += '<p class="hj-av" style="background:#fee2e2;color:#991b1b">Evento grave: notificar o NOTIVISA em até 72 horas e abrir a investigação detalhada (FR 045) em até 60 dias, conforme o PQ 014 e o PQ 070.</p>';
+    o += '<div class="vidro pad" style="margin-bottom:14px"><table><tbody><tr><td><b>Aberta por</b></td><td>' + h(r.aberto_por || '') + ' · ' + MD.fmtData((r.criado_em || r.data || '').slice(0, 10)) + '</td><td><b>Origem</b></td><td>' + h(r.origem || '') + '</td></tr><tr><td><b>Unidade</b></td><td>' + h(r.unidade || '') + '</td><td><b>Impacto no paciente</b></td><td>' + (r.impacto ? 'Sim' : 'Não') + (r.gravidade ? ' · ' + h(r.gravidade) : '') + '</td></tr></tbody></table><p><b>Descrição.</b> ' + h(r.descricao || '') + '</p>' + (r.correcao ? '<p><b>Correção imediata.</b> ' + h(r.correcao) + '</p>' : '') + '</div>';
+    o += '<div class="vidro pad" style="margin-bottom:14px"><h3 style="margin-top:0">Análise da causa raiz</h3><div class="fv-multi">' + NC_CAUSA.map(function (c) { return '<label class="hj-ck"><input type="checkbox" data-nccausa value="' + h(c) + '"' + ((r.causa_tipo || []).indexOf(c) >= 0 ? ' checked' : '') + (ed ? '' : ' disabled') + '> ' + h(c) + '</label>'; }).join('') + '</div><label class="cmp fv-w"><span>Causa identificada (por que aconteceu)</span><textarea id="nc-causa" rows="3"' + (ed ? '' : ' disabled') + '>' + h(r.causa || '') + '</textarea></label></div>';
+    o += '<div class="vidro pad" style="margin-bottom:14px"><h3 style="margin-top:0">Plano de ação</h3><div style="overflow:auto"><table class="tbl fv-tab"><thead><tr><th>O que será feito</th><th>Quem</th><th>Até quando</th><th>Feita</th><th></th></tr></thead><tbody id="nc-acoes">' + (r.acoes || []).map(function (x) { return ncLinhaAcao(x, ed); }).join('') + '</tbody></table></div>' + (ed ? '<button type="button" class="btn s" data-ncadd style="margin-top:6px">＋ Adicionar ação</button>' : '') + '</div>';
+    if (evt) o += '<div class="vidro pad" style="margin-bottom:14px"><h3 style="margin-top:0">Notificação à vigilância (NOTIVISA)</h3><label class="cmp"><span>Situação / nº do protocolo</span><input id="nc-notivisa" value="' + h(r.notivisa || '') + '" placeholder="Ex.: Notificada em 10/11, protocolo 12345 · ou: não se aplica"' + (ed ? '' : ' disabled') + '></label></div>';
+    o += '<div class="vidro pad" style="margin-bottom:14px"><h3 style="margin-top:0">Verificação da eficácia</h3><label class="cmp fv-w"><span>As ações resolveram? Como foi verificado (data e resultado)</span><textarea id="nc-efic" rows="3"' + (ed ? '' : ' disabled') + '>' + h(r.eficacia || '') + '</textarea></label>' + (enc ? '<p style="color:var(--mut);font-size:.82rem">Encerrada por <b>' + h(r.encerrado_por || '') + '</b> em ' + MD.fmtData(r.encerrada_em) + '.</p>' : '') + '</div>';
+    var prox = NC_PROX[r.status];
+    o += '<div class="bt" style="gap:10px;flex-wrap:wrap">' + (ed ? '<button class="btn s" data-ncsalvar>Salvar alterações</button>' : '') + (ed && prox ? '<button class="btn" data-ncavancar="' + prox + '"' + (prox === 'encerrada' && !fecha ? ' disabled title="Só o RT ou a Diretoria encerra"' : '') + '>Avançar para: ' + NC_ST[prox] + '</button>' : '') + (enc && fecha ? '<button class="btn s v" data-ncreabrir>Reabrir</button>' : '') + '</div>';
+    o += '<h2 class="sec">Histórico</h2><div class="vidro pad"><ul class="nc-hist">' + (r.historico || []).slice().reverse().map(function (x) { return '<li><b>' + h(x.quem) + '</b> · ' + new Date(x.quando).toLocaleString('pt-BR') + '<br>' + h(x.texto) + '</li>'; }).join('') + '</ul></div>';
+    return o;
+  }
+  function ncLinhaAcao(x, ed) { x = x || {}; var d = ed ? '' : ' disabled'; return '<tr><td><input data-nca="o" value="' + h(x.o || '') + '"' + d + '></td><td><input data-nca="q" value="' + h(x.quem || '') + '"' + d + '></td><td><input type="date" data-nca="d" value="' + h(x.quando || '') + '"' + d + '></td><td style="text-align:center"><input type="checkbox" data-nca="ok"' + (x.feita ? ' checked' : '') + d + '></td><td class="fv-x">' + (ed ? '<button type="button" class="btn s" data-ncdel>×</button>' : '') + '</td></tr>'; }
+  function ncLer(r) {
+    r.causa_tipo = [].slice.call(document.querySelectorAll('[data-nccausa]:checked')).map(function (x) { return x.value; });
+    r.causa = $('nc-causa').value.trim();
+    r.acoes = [].slice.call(document.querySelectorAll('#nc-acoes tr')).map(function (tr) { var g = function (k) { return tr.querySelector('[data-nca="' + k + '"]'); }; return { o: g('o').value.trim(), quem: g('q').value.trim(), quando: g('d').value, feita: g('ok').checked }; }).filter(function (x) { return x.o; });
+    if ($('nc-notivisa')) r.notivisa = $('nc-notivisa').value.trim();
+    r.eficacia = $('nc-efic').value.trim();
+  }
+  async function ncSalvar(r, avancar) {
+    ncLer(r);
+    if (avancar) {
+      if (avancar === 'em_acao' && !r.causa) throw new Error('Descreva a causa identificada antes de passar para as ações.');
+      if (avancar === 'verificacao' && !r.acoes.length) throw new Error('Cadastre ao menos uma ação.');
+      if (avancar === 'verificacao' && r.acoes.some(function (x) { return !x.feita; })) throw new Error('Há ações ainda não concluídas. Marque como feitas as que já foram executadas.');
+      if (avancar === 'encerrada') { if (!r.eficacia) throw new Error('Descreva a verificação da eficácia para encerrar.'); r.encerrada_em = hoje(); r.encerrado_por = DB.user.nome; }
+      r.status = avancar; ncHist(r, 'Situação alterada para: ' + NC_ST[avancar]);
+    } else ncHist(r, 'Dados atualizados');
+    await DB.saveNc(r); DB.log('ocorrencia', r.numero + ' ' + r.status); await carregar(); render(); toast(avancar ? 'Situação: ' + NC_ST[avancar] + '.' : 'Alterações salvas.');
+  }
+  function ncRel(r) {
+    var c = '<table><tbody><tr><td><b>Tipo</b></td><td>' + h(NC_TIPO[r.tipo]) + '</td><td><b>Data</b></td><td>' + MD.fmtData(r.data) + '</td></tr><tr><td><b>Setor / unidade</b></td><td>' + h(r.setor || '') + ' · ' + h(r.unidade || '') + '</td><td><b>Origem</b></td><td>' + h(r.origem || '') + '</td></tr><tr><td><b>Impacto no paciente</b></td><td>' + (r.impacto ? 'Sim' : 'Não') + '</td><td><b>Gravidade</b></td><td>' + h(r.gravidade || '—') + '</td></tr></tbody></table><h2>Descrição</h2><p>' + h(r.descricao || '') + '</p>' + (r.correcao ? '<h2>Correção imediata</h2><p>' + h(r.correcao) + '</p>' : '') + '<h2>Análise da causa raiz</h2><p><b>' + h((r.causa_tipo || []).join(', ') || '—') + '</b></p><p>' + h(r.causa || '—') + '</p><h2>Plano de ação</h2>' + ((r.acoes || []).length ? '<table><thead><tr><th>Ação</th><th>Quem</th><th>Até quando</th><th>Feita</th></tr></thead><tbody>' + r.acoes.map(function (x) { return '<tr><td>' + h(x.o) + '</td><td>' + h(x.quem) + '</td><td>' + MD.fmtData(x.quando) + '</td><td>' + (x.feita ? 'Sim' : 'Não') + '</td></tr>'; }).join('') + '</tbody></table>' : '<p>—</p>') + (r.notivisa ? '<h2>Notificação (NOTIVISA)</h2><p>' + h(r.notivisa) + '</p>' : '') + '<h2>Verificação da eficácia</h2><p>' + h(r.eficacia || '—') + '</p><h2>Histórico</h2><table><tbody>' + (r.historico || []).map(function (x) { return '<tr><td>' + new Date(x.quando).toLocaleString('pt-BR') + '</td><td>' + h(x.quem) + '</td><td>' + h(x.texto) + '</td></tr>'; }).join('') + '</tbody></table>';
+    return '<button class="voltar" data-ncrelvolta>← Voltar</button><div class="barra-doc topo"><h1>' + h(r.numero) + '<small>Relatório da ocorrência</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div><div class="fundo-folha">' + MD.folha({ codigo: r.numero, titulo: 'Ocorrência · ' + (NC_TIPO[r.tipo] || ''), tipo: 'FR', versao: '1', status: r.status === 'encerrada' ? 'vigente' : 'rascunho', elaborador: r.aberto_por, data_elaboracao: (r.criado_em || r.data || '').slice(0, 10), aprovador: r.encerrado_por || '', data_vigencia: r.encerrada_em || '' }, c) + '</div>';
+  }
   /* ---------- Indicadores: metas e resultados mensais ---------- */
   var MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   function indAno() { var s = S.ind || (S.ind = { ano: 0, rel: false }); if (!s.ano) { var ys = S.d.indVal.map(function (v) { return v.ano; }); s.ano = ys.length ? Math.max.apply(null, ys) : new Date().getFullYear(); } return s.ano; }
@@ -544,6 +623,7 @@
   function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }, { c: 'FR 001', t: 'Controle de Temperatura de Estocagem de Reagentes e Amostras', cat: 'Temperatura e ambiente', modo: 'temp' }]); }
   function pgForms() {
     var R = S.frm || (S.frm = { cod: '', q: '' });
+    if (R.cod === 'FR 006' || R.cod === 'FR 038') { var tp0 = R.cod === 'FR 006' ? 'nc' : 'evento'; R.cod = ''; S.nc = { id: null, novo: true, tipo: tp0, f: 'abertas', ft: '' }; setTimeout(function () { irPara('nc'); }, 0); return '<div class="vazio">Abrindo o registro de ocorrências…</div>'; }
     if (R.cod === 'FR 001') { R.cod = ''; S.rdTab = 'temp'; setTimeout(function () { irPara('registros'); }, 0); return '<div class="vazio">Abrindo o registro de temperaturas…</div>'; }
     if (R.cod === 'FIA') { R.cod = ''; S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false }; S.cq.fia = true; return pgFia(); }
     if (R.cod) return pgFormPreencher();
@@ -873,6 +953,18 @@
     if ((a = t.closest('[data-fvdel]'))) { var trr = a.closest('tr'); if (trr) trr.remove(); return; }
     if (t.closest('[data-frmvolta]')) { S.frm = { cod: '', q: '' }; return render(); }
     if (t.closest('[data-frmsalvar]')) { try { await salvarForm(); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-ncnovo]')) { S.nc.novo = true; S.nc.tipo = 'nc'; return render(); }
+    if ((a = t.closest('[data-ncabrir]'))) { S.nc.id = a.dataset.ncabrir; S.nc.rel = false; return render(); }
+    if (t.closest('[data-ncvolta]')) { S.nc.novo = false; S.nc.id = null; S.nc.rel = false; return render(); }
+    if (t.closest('[data-ncrel]')) { S.nc.rel = true; return render(); }
+    if (t.closest('[data-ncrelvolta]')) { S.nc.rel = false; return render(); }
+    if ((a = t.closest('[data-ncf]'))) { S.nc.f = a.dataset.ncf; return render(); }
+    if (t.closest('[data-ncsalvarnovo]')) { try { await ncSalvarNovo(); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-ncsalvar]')) { try { await ncSalvar(S.d.nc.filter(function (x) { return x.id === S.nc.id; })[0]); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-ncavancar]'))) { try { await ncSalvar(S.d.nc.filter(function (x) { return x.id === S.nc.id; })[0], a.dataset.ncavancar); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-ncreabrir]')) { try { var rb = S.d.nc.filter(function (x) { return x.id === S.nc.id; })[0]; rb.status = 'em_acao'; rb.encerrada_em = null; rb.encerrado_por = ''; ncHist(rb, 'Ocorrência reaberta'); await DB.saveNc(rb); await carregar(); render(); toast('Ocorrência reaberta.'); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-ncadd]')) { $('nc-acoes').insertAdjacentHTML('beforeend', ncLinhaAcao(null, true)); return; }
+    if ((a = t.closest('[data-ncdel]'))) { a.closest('tr').remove(); return; }
     if (t.closest('[data-indrel]')) { S.ind.rel = true; return render(); }
     if (t.closest('[data-indvolta]')) { S.ind.rel = false; return render(); }
     if ((a = t.closest('[data-indsalvar]'))) { try { await salvarInd(a.dataset.indsalvar); } catch (er) { toast(er.message, 1); } return; }
@@ -921,6 +1013,7 @@
   });
   document.addEventListener('input', function (e) {
     if (e.target.dataset && e.target.dataset.api !== undefined && e.target.dataset.apid) varApoio(e.target);
+    if (e.target.id === 'nc-ftipo') { S.nc.ft = e.target.value; return render(); }
     if (e.target.id === 'ind-ano') { S.ind.ano = Number(e.target.value); return render(); }
     if (e.target.id === 'fm-q') { S.frm = S.frm || { cod: '', q: '' }; S.frm.q = e.target.value; var p3 = e.target.selectionStart; render(); var n3 = $('fm-q'); if (n3) { n3.focus(); n3.setSelectionRange(p3, p3); } }
     if (e.target.id === 'rg-q') { S.reg.q = e.target.value; var pp = e.target.selectionStart; render(); var nn = $('rg-q'); if (nn) { nn.focus(); nn.setSelectionRange(pp, pp); } }
@@ -947,7 +1040,7 @@
   async function iniciar() {
     try { await carregar(); } catch (e) { return telaLogin('Não foi possível carregar os dados: ' + e.message); }
     $('login').classList.add('oculto'); $('app').classList.remove('oculto');
-    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'frm', 'regs', 'cq', 'ind', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
+    var p = (location.hash || '').slice(1); if (['inicio', 'programa', 'docs', 'legais', 'registros', 'frm', 'regs', 'nc', 'cq', 'ind', 'relatorio', 'ajustes'].indexOf(p) >= 0) S.pg = p;
     render();
   }
   (async function () { try { var u = await DB.init(); if (!u && window.parent !== window && !DB.demo) { document.body.insertAdjacentHTML('beforeend', '<div id="sso-msg" style="position:fixed;inset:0;display:grid;place-items:center;background:#e9f6f5;color:#0b6b66;font:600 1rem sans-serif">Entrando com a sua conta do painel…</div>'); u = await DB.sso(); var m = document.getElementById('sso-msg'); if (m) m.remove(); } if (u) iniciar(); else telaLogin(DB.ssoMotivo ? 'Entrada automática não funcionou: ' + DB.ssoMotivo + (DB.armazenamentoOk() ? '' : ' · o navegador está bloqueando o armazenamento deste site dentro do painel.') : undefined); } catch (e) { var m2 = document.getElementById('sso-msg'); if (m2) m2.remove(); telaLogin(e.message); } })();

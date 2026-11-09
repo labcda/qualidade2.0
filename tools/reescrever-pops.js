@@ -93,6 +93,8 @@ const FRASES = [
   ['PQ 068', '4. Uma via fica com o paciente e outra é arquivada junto ao cadastro do atendimento.', '4. O termo é registrado no sistema, junto ao cadastro do atendimento; o paciente recebe uma cópia do termo (digital ou impressa pelo relatório do sistema).'],
   ['PQ 022', 'uma cópia é arquivada no dossiê do funcionário.', 'uma cópia digitalizada é anexada ao registro de treinamento do funcionário no sistema.'],
   ['PQ 069', '### 5.5 Comunicação e análise', '### 5.4 Comunicação e análise'],
+  ['MQ 002', 'pode ser feita verbalmente a um membro do NSP responsável pelo recebimento, ou por meio do FR 038 - Incidentes e Eventos Adversos, de livre e fácil acesso na nuvem.', 'é feita pelo próprio profissional, diretamente no sistema da Qualidade (Não conformidades › Nova ocorrência, que substitui o FR 038 - Incidentes e Eventos Adversos), de livre e fácil acesso a todos os colaboradores.'],
+  ['PQ 038', 'comunicar verbalmente ao NSP qualquer incidente ou evento adverso e preencher o formulário interno.', 'registrar no sistema (Não conformidades › Nova ocorrência) qualquer incidente ou evento adverso que identificar, no mesmo dia; o aviso verbal ao NSP não substitui o registro.'],
   ['PQ 010', 'Depois de digitadas, as planilhas são arquivadas.', 'Depois de digitadas, as planilhas são digitalizadas e anexadas ao registro no sistema da Qualidade (PQ 003).'],
   ['PQ 017', 'O certificado tem pasta própria para guarda.', 'O certificado é digitalizado e anexado ao cadastro do instrumento no sistema da Qualidade (Equipamentos); o original fica guardado em pasta própria.'],
   ['PQ 024', 'imprime-se a notificação, que é arquivada na pasta de Notificação da Vigilância Sanitária do laboratório', 'anexa-se o comprovante da notificação ao registro no sistema da Qualidade'],
@@ -129,6 +131,25 @@ function adic(d, t) {
 }
 /* ---------- 4. PQ 001, 002 e 003: reescritos à mão ---------- */
 const MAO = {
+  'PQ 014': { 5: `- Toda não conformidade, incidente, evento adverso ou near miss é registrado, no mesmo dia, por quem o identificou, diretamente no sistema (Qualidade 2.0 › Não conformidades › Nova ocorrência). Cada colaborador registra as suas próprias ocorrências, com o próprio login; avisar a chefia ou o NSP verbalmente não substitui o registro.
+- A ocorrência pode ser identificada nas auditorias internas ou no funcionamento normal (atendimento, cadastro, coleta, ambiente, realização dos exames), nos resultados dos controles interno e externo, em reclamações e manifestações de pacientes e nas visitas técnicas do NSP. O registro do sistema substitui os formulários FR 006 (Não conformidade) e FR 038 (Incidente e Evento Adverso), com os mesmos campos.
+- O sistema numera cada ocorrência (OC aaaa-nnn), registra data, hora, usuário, setor e unidade, e guarda o histórico de tudo o que foi feito nela.
+### 5.1 Não conformidades
+- Fluxo no sistema: Aberta → Em análise (causa raiz) → Ações em andamento (o que, quem e até quando) → Verificação de eficácia → Encerrada.
+- O chefe do setor, com o Supervisor de Qualidade, analisa a causa e define as ações. Ações com prazo vencido aparecem destacadas no sistema e são acompanhadas pelo Supervisor de Qualidade.
+- O encerramento exige a verificação de eficácia das ações e é feito pelo Responsável Técnico ou pela Diretoria, com identificação eletrônica e data.
+- Periodicamente o NSP e a Qualidade analisam as ocorrências abertas e as recidivas, que são tratadas com ênfase. Reuniões e exposições à equipe são registradas em ata no sistema (FR 023), com os participantes identificados.
+### 5.2 Incidentes e eventos adversos
+- Os incidentes e eventos adversos são registrados no sistema pelo próprio colaborador que os identificou ou presenciou, com a gravidade e o impacto para o paciente. As ocorrências abertas ficam visíveis ao NSP na lista de Não conformidades.
+- Outra forma de identificação são as visitas técnicas de observação feitas pelo NSP quando julgar necessário; nesse caso o próprio membro do NSP registra a ocorrência no sistema.
+- O NSP analisa as ocorrências abertas no sistema, classifica a gravidade, decide sobre a notificação no NOTIVISA e registra a situação e o protocolo na própria ocorrência.
+- O NSP se reúne mensalmente, ou quando julgar necessário, para analisar as ocorrências e definir ações. A ata é registrada no sistema (FR 023), com os presentes identificados.
+- Quando necessário, o NSP leva as ocorrências à Diretoria e aos chefes de setores para definir ações que impeçam novos incidentes e eventos adversos.
+### 5.3 Never Events
+- O monitoramento dos Never Events é priorizado pelo CDA Laboratório, e todos demandam medidas urgentes para evitar recorrência.
+- Conforme o Manual Técnico, todos os Never Events são notificados em no máximo 72 horas, com todos os campos da notificação obrigatoriamente preenchidos. O sistema exibe um aviso quando a ocorrência é registrada como Never Event, dano grave ou óbito.
+- Ocorrendo um Never Event, faz-se também uma investigação detalhada no FR 045 - Relatório Descritivo de Investigação de Evento Adverso Grave e Óbito, a ser concluída em até 60 dias.
+- O NSP mantém no sistema, na própria ocorrência, todos os documentos relacionados ao evento e à investigação e os apresenta à autoridade sanitária, se necessário.` },
   'PQ 001': {
     3: `- Documento controlado: documento do Sistema da Qualidade com código, versão, data de vigência e aprovação eletrônica, mantido no sistema (Qualidade 2.0) e na Lista Mestra, disponível em sua versão vigente.
 - Lista Mestra (LM 001): relação de todos os documentos do Sistema da Qualidade, com código, título, versão e situação. É gerada pelo próprio sistema (Qualidade 2.0 › Documentos).
