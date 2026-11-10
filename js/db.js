@@ -82,6 +82,11 @@
       if (demo) { var b = banco(), i = b.docs.findIndex(function (x) { return x.id === id; }); if (i >= 0) { Object.assign(b.docs[i], campos); sv(b); } return true; }
       return q(sb.from('q2_documentos').update(campos).eq('id', id));
     },
+    async marcaObsoleto(id) {   // linha repetida de biblioteca (mesmo código, título antigo): sai de circulação sem apagar
+      var campos = { status: 'obsoleto', atualizado_em: new Date().toISOString() };
+      if (demo) { var b = banco(), i = b.docs.findIndex(function (x) { return x.id === id; }); if (i >= 0) { Object.assign(b.docs[i], campos); sv(b); } return true; }
+      return q(sb.from('q2_documentos').update(campos).eq('id', id));
+    },
     async saveDocs(lista) {   // importação em lote
       if (demo) { var b = banco(); lista.forEach(function (d) { var i = b.docs.findIndex(function (x) { return x.codigo === d.codigo && x.titulo === d.titulo && x.unidade === d.unidade; }); if (i < 0) { d.id = uid(); b.docs.push(d); } else b.docs[i] = Object.assign(b.docs[i], d); }); sv(b); return lista.length; }
       for (var k = 0; k < lista.length; k += 40) await q(sb.from('q2_documentos').upsert(lista.slice(k, k + 40), { onConflict: 'codigo,titulo,unidade' }));
