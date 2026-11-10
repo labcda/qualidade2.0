@@ -306,6 +306,7 @@ function reforco(d, t) {
   var cab = '## 7 Referências' + NL, j = t.indexOf(cab); if (j >= 0) t = t.slice(0, j) + cab + NL + '- ' + x.n + '.' + t.slice(j + cab.length);
   return t;
 }
+const FR_OCOR = require("./fr-ocorrencia.js");
 /* ---------- execução ---------- */
 const vistos = {}, saida = [];
 DOCS.forEach(function (d) {
@@ -315,6 +316,7 @@ DOCS.forEach(function (d) {
   t = adic(d, t);
   t = tabelaRegistros(t);
   t = frases(d, t);
+  if (FR_OCOR[d.codigo]) { var hi = t.indexOf('Histórico de revisões'); t = FR_OCOR[d.codigo] + String.fromCharCode(10, 10) + (hi >= 0 ? t.slice(hi) : ''); }
   t = historico(d, t);
   if (d.tipo !== 'FR') { t = reforco(d, t); t = insereForms(d, t); t = anexos(d, t); }
   t = t.replace(/\n{3,}/g, '\n\n').trim();
