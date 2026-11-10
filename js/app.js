@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false, hema: [] }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-09b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || [];
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || [];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -714,12 +714,118 @@
   /* ---------- O que preencher hoje (formulários de rotina diária) ---------- */
   function rotinaFeita(it, dia) { return S.d.regs.filter(function (r) { return r.origem === 'Registros' && r.form === it.form && r.item === it.item && (r.unidade || 'Matriz') === it.unidade && r.dia === dia; })[0]; }
   function tempsFeitas(dia) { var eq = S.d.equip; return { n: eq.filter(function (e) { return S.d.temps.some(function (t) { return t.equip_id === e.id && t.dia === dia; }); }).length, total: eq.length }; }
-  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n) + (fiaDaSemana(dia) ? 0 : 1); }
+  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !(it.desde && dia < it.desde) && !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n) + (fiaDaSemana(dia) ? 0 : 1) + (ehDiaFunc(dia) && !hemaDoDia(dia) ? 1 : 0) + (ehDiaFunc(dia) ? TAREFAS.filter(function (t) { return t.freq === 'diaria' && !(t.desde && dia < t.desde) && !tarefaFeita(t, dia, dia); }).length : 0); }
+  /* ---------- rotinas periódicas e prazos (diária, semanal, quinzenal, mensal, trimestral, semestral, anual) ---------- */
+  var TAREFAS = [
+    { t: 'Controle interno da bioquímica no A15 (BioSystems e PNCQ), antes da rotina', ref: 'PQ 006 · ITA 013', freq: 'diaria', resp: 'Técnico da bancada', desde: '2026-11-10' },
+    { t: 'Controle de sódio e potássio (um PNCQ e um BioSystems)', ref: 'PQ 006', freq: 'semanal', dow: 1, resp: 'Técnico da bancada', desde: '2026-11-09' },
+    { t: 'Controle interno do hemograma (amostra-controle Diagon, três níveis)', ref: 'FR 029 · PQ 006', freq: 'semanal', dow: 1, resp: 'Técnico da hematologia', form: 'FR 029', desde: '2026-11-09' },
+    { t: 'Controle de aglutinação e floculação (ASO, FR e VDRL, positivo e negativo)', ref: 'FR 039 · PQ 006', freq: 'quinzenal', resp: 'Técnico da bancada', form: 'FR 039', desde: '2026-11-01' },
+    { t: 'Comparação mensal de amostras aleatórias com o laudo do laboratório de apoio', ref: 'PQ 006 · PQ 056', freq: 'mensal', dm: 1, resp: 'Responsável Técnico', desde: '2026-11-01' },
+    { t: 'Lançar os indicadores do mês anterior', ref: 'FR 059 · PQ 053', freq: 'mensal', dm: 5, resp: 'Supervisor de Qualidade', desde: '2026-11-01' },
+    { t: 'Aplicar o check list de manutenção predial', ref: 'FR 053 · PQ 052', freq: 'mensal', dm: 1, resp: 'Chefe da Recepção', form: 'FR 053', desde: '2026-11-01' },
+    { t: 'Conferir o cronograma de manutenção preventiva do mês', ref: 'FR 054 · PQ 052', freq: 'mensal', dm: 1, resp: 'Supervisor de Qualidade', form: 'FR 054', desde: '2026-11-01' },
+    { t: 'Conferir os kits de emergência', ref: 'FR 080 · PQ 069', freq: 'mensal', dm: 1, resp: 'Chefe da Recepção', form: 'FR 080', desde: '2026-11-01' },
+    { t: 'Conferir licenças e documentos externos (alvará, CNES, PCMSO, PGR)', ref: 'FR 073 · PQ 062', freq: 'trimestral', dm: 5, mes: 1, resp: 'Supervisor de Qualidade', form: 'FR 073', desde: '2026-10-05' },
+    { t: 'Analisar a pesquisa de satisfação', ref: 'FR 024 · PQ 027', freq: 'semestral', dm: 10, mes: 1, resp: 'Supervisor de Qualidade', desde: '2026-07-10' },
+    { t: 'Realizar a auditoria interna do semestre', ref: 'FR 008 · FR 040 · PQ 013', freq: 'semestral', dm: 5, mes: 6, resp: 'Supervisor de Qualidade', desde: '2026-06-05' },
+    { t: 'Revisar a matriz de riscos e oportunidades', ref: 'FR 050 · PQ 049', freq: 'anual', dm: 10, mes: 1, resp: 'Supervisor de Qualidade', form: 'FR 050', desde: '2026-01-10' },
+    { t: 'Definir o programa anual de auditorias internas', ref: 'FR 061 · PQ 013', freq: 'anual', dm: 5, mes: 1, resp: 'Supervisor de Qualidade', form: 'FR 061', desde: '2026-01-05' },
+    { t: 'Avaliar a competência e o desempenho da equipe', ref: 'FR 063 · PQ 059', freq: 'anual', dm: 5, mes: 3, resp: 'Responsável Técnico', form: 'FR 063', desde: '2026-03-05' },
+    { t: 'Avaliar os fornecedores', ref: 'FR 007 · PQ 008', freq: 'anual', dm: 5, mes: 2, resp: 'Supervisor de Qualidade', desde: '2026-02-05' },
+    { t: 'Realizar o simulado de emergência', ref: 'FR 066 · PQ 047 · PQ 050', freq: 'anual', dm: 5, mes: 9, resp: 'Chefe da Área Técnica', form: 'FR 066', desde: '2026-09-05' },
+    { t: 'Reunião de análise crítica pela direção', ref: 'FR 060 · PQ 054', freq: 'anual', dm: 5, mes: 11, resp: 'Diretoria e Responsável Técnico', form: 'FR 060', desde: '2026-11-05' }
+  ];
+  function isoD(y, m, d) { return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
+  function ultDiaMes(y, m) { return new Date(y, m, 0).getDate(); }
+  function maisMeses(iso, n) { var p = iso.split('-'), y = +p[0], m = +p[1] + n; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return isoD(y, m, +p[2]); }
+  /* ciclo (início e fim) em que a data "ref" está */
+  function cicloDe(t, ref) {
+    var p = ref.split('-'), y = +p[0], m = +p[1], dd = +p[2];
+    if (t.freq === 'diaria') return { ini: ref, fim: ref };
+    if (t.freq === 'semanal') { var dw = new Date(ref + 'T12:00:00').getDay(), diff = (dw - (t.dow === undefined ? 1 : t.dow) + 7) % 7, ini = somaDias(ref, -diff); return { ini: ini, fim: somaDias(ini, 6) }; }
+    if (t.freq === 'quinzenal') return dd >= 16 ? { ini: isoD(y, m, 16), fim: isoD(y, m, ultDiaMes(y, m)) } : { ini: isoD(y, m, 1), fim: isoD(y, m, 15) };
+    var dm = Math.max(1, Math.min(28, t.dm || 1)), passo = t.freq === 'mensal' ? 1 : t.freq === 'trimestral' ? 3 : t.freq === 'semestral' ? 6 : 12, base = Math.max(1, Math.min(12, t.mes || 1));
+    for (var k = 0; k < 14; k++) {
+      var mm = m - k, yy = y; while (mm < 1) { mm += 12; yy--; }
+      if ((((mm - base) % passo) + passo) % passo === 0) { var d0 = isoD(yy, mm, dm); if (d0 <= ref) return { ini: d0, fim: somaDias(maisMeses(d0, passo), -1) }; }
+    }
+    return { ini: ref, fim: ref };
+  }
+  function normT(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+  function tarefaFeita(t, ini, fim) { var n = normT(t.t); return S.d.regs.filter(function (r) { return r.origem === 'TarefasFeitas' && normT(r.item) === n && r.dia >= ini && r.dia <= fim; })[0]; }
+  /* situação de cada tarefa: ok, pendente (no período atual) ou atrasada (período anterior sem registro) */
+  function situTarefa(t) {
+    var hj = hoje(), c = cicloDe(t, hj), f = tarefaFeita(t, c.ini, c.fim), r = { c: c, feita: f, st: f ? 'ok' : 'pend' };
+    if (t.freq === 'diaria') { r.st = f ? 'ok' : 'pend'; return r; }
+    var ant = cicloDe(t, somaDias(c.ini, -1)); r.ant = ant;
+    if (!(t.desde && ant.fim < t.desde) && !tarefaFeita(t, ant.ini, ant.fim)) r.st = 'atrasada';
+    return r;
+  }
+  function tarefasAtrasadas() { return TAREFAS.filter(function (t) { return t.freq !== 'diaria' && situTarefa(t).st === 'atrasada'; }); }
+  var FREQ_ROT = { diaria: 'diária', semanal: 'semanal', quinzenal: 'quinzenal', mensal: 'mensal', trimestral: 'trimestral', semestral: 'semestral', anual: 'anual' };
+  function secaoTarefas() {
+    var pode = DB.pode('escrever'), l = TAREFAS.filter(function (t) { return t.freq !== 'diaria'; }), o = '<h2 class="sec">Rotinas periódicas e prazos</h2><div class="hj-lista">';
+    l.sort(function (x, y) { var a = situTarefa(x).st, b = situTarefa(y).st, ord = { atrasada: 0, pend: 1, ok: 2 }; return ord[a] - ord[b]; });
+    l.forEach(function (t) {
+      var s = situTarefa(t), i = TAREFAS.indexOf(t);
+      o += '<div class="vidro hj-it ' + (s.st === 'ok' ? 'ok' : 'pend') + '"><span class="hj-pt" style="' + (s.st === 'atrasada' ? 'background:#dc2626' : '') + '"></span><div class="hj-t"><b>' + h(t.t) + ' <span class="selo ' + (s.st === 'atrasada' ? 'N' : s.st === 'ok' ? 'A' : 'P') + '" style="margin-left:6px">' + (s.st === 'atrasada' ? 'ATRASADA' : s.st === 'ok' ? 'em dia' : 'pendente') + '</span></b><small>' + h(FREQ_ROT[t.freq]) + ' · ' + h(t.ref) + ' · ' + h(t.resp) + (s.st === 'atrasada' ? ' · período anterior (' + MD.fmtData(s.ant.ini) + ' a ' + MD.fmtData(s.ant.fim) + ') sem registro' : '') + (s.st === 'pend' ? ' · prazo até ' + MD.fmtData(s.c.fim) : '') + (s.feita ? ' · feita em ' + MD.fmtData(s.feita.dia) + (s.feita.usuario ? ' por ' + h(s.feita.usuario) : '') : '') + '</small></div>' +
+        (t.form && pode && s.st !== 'ok' ? '<button class="btn s" data-tfform="' + h(t.form) + '">Abrir formulário</button>' : '') + (pode && s.st !== 'ok' ? '<button class="btn s p" data-tffeita="' + i + '">Marcar como feita</button>' : '') + '</div>';
+    });
+    return o + '</div>';
+  }
+  function modalTarefa(i) {
+    var t = TAREFAS[i]; if (!t) return;
+    modal('<h3>Marcar como feita</h3><p style="margin:0 0 10px"><b>' + h(t.t) + '</b></p><label class="cmp"><span>Data em que foi feita</span><input type="date" id="tf-d" value="' + (S.tfDia || hoje()) + '" max="' + hoje() + '"></label><label class="cmp"><span>Observação (opcional)</span><input id="tf-o"></label><div class="bt"><button class="btn s" data-x>Cancelar</button><button class="btn" id="tf-ok">Salvar</button></div>', function (o) {
+      $('tf-ok').onclick = async function () {
+        var d = $('tf-d').value; if (!d) return toast('Informe a data.', 1);
+        try { await DB.addRegistros([{ origem: 'TarefasFeitas', form: '', titulo: 'Tarefa de rotina feita', unidade: '', periodo: d.slice(0, 7), dia: d, item: t.t, usuario: DB.user.nome, criado_em: new Date().toISOString(), dados: { tarefa_id: normT(t.t).slice(0, 40), titulo: t.t, data: d, usuario: DB.user.nome, obs: $('tf-o').value.trim(), registrado_em: new Date().toISOString() } }]); DB.log('tarefa', t.t + ' ' + d); o.fechar(); await carregar(); render(); toast('Rotina registrada.'); } catch (er) { toast(er.message, 1); }
+      };
+    });
+  }
+  /* ---------- lacunas: nada pode ficar sem registro (dias de funcionamento: segunda a sábado) ---------- */
+  var DIAS_FUNC = [1, 2, 3, 4, 5, 6], AN_HEMO = ['Hemácias', 'Hemoglobina', 'Hematócrito', 'VCM', 'HCM', 'CHCM', 'RDW', 'Leucócitos totais', 'Plaquetas'];
+  function ehDiaFunc(iso) { return DIAS_FUNC.indexOf(new Date(iso + 'T12:00:00').getDay()) >= 0; }
+  function semExpediente(d) { return S.d.regs.some(function (r) { return r.origem === 'SemExpediente' && r.dia === d; }); }
+  function diaExtenso(d) { return ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][new Date(d + 'T12:00:00').getDay()] + ' ' + MD.fmtData(d).slice(0, 5); }
+  function hemaDoDia(d) { return S.d.hema.filter(function (r) { var dt = r.origem === 'CQPendentes' ? r.data : r.dia; return dt === d && r.status !== 'CANCELADO'; })[0]; }
+  function hemaPend(dia) { return S.d.hema.filter(function (r) { return r.origem === 'CQPendentes' && (r.status === 'PENDENTE' || r.status === 'PARCIAL') && r.data < dia; }).sort(function (x, y) { return x.data < y.data ? -1 : 1; }); }
+  function faltasDoDia(d) {
+    var f = []; if (!ehDiaFunc(d) || semExpediente(d)) return f;
+    window.Q2_ROTINA.forEach(function (it) { if (it.desde && d < it.desde) return; if (!rotinaFeita(it, d)) f.push(it.t); });
+    S.d.equip.forEach(function (e) { if (!S.d.temps.some(function (t) { return t.equip_id === e.id && t.dia === d; })) f.push('Temperatura · ' + (e.nome || e.identificacao || e.codigo || 'equipamento')); });
+    if (!hemaDoDia(d)) f.push('Hematologia · amostra do dia (reanálise)');
+    TAREFAS.forEach(function (t) { if (t.freq === 'diaria' && !(t.desde && d < t.desde) && !tarefaFeita(t, d, d)) f.push(t.t); });
+    return f;
+  }
+  function atrasos() { var o = []; for (var i = 1; i <= 7; i++) { var d = somaDias(hoje(), -i), f = faltasDoDia(d); if (f.length) o.push({ dia: d, itens: f }); } return o; }
+  function painelAtrasos() {
+    var a = atrasos(); if (!a.length) return ''; var pode = DB.pode('escrever');
+    return '<div class="vidro pad hj-atraso"><b>⚠ Dias anteriores com registros que faltam</b><p>Nenhuma lacuna pode ficar sem explicação: lance o registro do dia ou, se o laboratório não funcionou, marque o dia como sem expediente.</p>' + a.map(function (x) { return '<div class="hj-atr-l"><div><b>' + diaExtenso(x.dia) + '</b><small>' + x.itens.map(h).join(' · ') + '</small></div><div class="hj-atr-b"><button class="btn s p" data-rdir="' + x.dia + '">Lançar este dia</button>' + (pode ? '<button class="btn s" data-rdsemexp="' + x.dia + '">Sem expediente</button>' : '') + '</div></div>'; }).join('') + '</div>';
+  }
+  function cartaoHema(dia, pode) {
+    var ok = hemaDoDia(dia), pend = hemaPend(dia), o = '';
+    o += '<div class="vidro hj-it ' + (ok ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Hematologia · amostra do dia <span class="selo P" style="margin-left:6px">diário</span></b><small>' + (ok ? 'Amostra registrada nesta data' : 'Registre os valores originais de uma amostra do dia (Sysmex KX ou Zybio Z3). No dia seguinte ela é reanalisada e a variação é calculada.') + '</small></div>' + (ok || !pode ? '' : '<button class="btn s" data-hjabrir="hema">Preencher</button>') +
+      (ok ? '' : '<div class="hj-form"><div class="hj-campos"><label class="cmp"><span>Identificação da amostra <i class="obr">*</i></span><input id="hm-am" placeholder="Ex.: número do atendimento"></label><label class="cmp"><span>Equipamento</span><select id="hm-eq"><option>Sysmex KX</option><option>Zybio Z3</option></select></label>' + AN_HEMO.map(function (n, i) { return '<label class="cmp hj-c"><span>' + h(n) + '</span><input inputmode="decimal" data-hmv="' + i + '"></label>'; }).join('') + '<label class="cmp"><span>Observação</span><input id="hm-obs"></label></div><div class="bt"><button class="btn" data-hmsalvar>Registrar amostra</button></div></div>') + '</div>';
+    o += '<div class="vidro hj-it ' + (pend.length ? 'pend' : 'ok') + '"><span class="hj-pt"></span><div class="hj-t"><b>Hematologia · reanálise da amostra do dia anterior</b><small>' + (pend.length ? 'Pendente: amostra de ' + MD.fmtData(pend[0].data) + (pend.length > 1 ? ' e mais ' + (pend.length - 1) : '') + '. Digite o resultado da reanálise.' : 'Nenhuma reanálise pendente') + '</small></div>' + (pend.length ? '<button class="btn s" data-rdtab="apoio">Digitar reanálise</button>' : '') + '</div>';
+    return o;
+  }
+  async function salvarHema() {
+    var dia = S.rdData || hoje(), am = $('hm-am').value.trim(); if (hemaDoDia(dia)) throw new Error('A amostra de hematologia desta data já foi registrada.');
+    if (!am) throw new Error('Informe a identificação da amostra.');
+    var eq = $('hm-eq').value, linhas = [];
+    AN_HEMO.forEach(function (n, i) { var v = document.querySelector('[data-hmv="' + i + '"]').value.trim(); if (!v) return; var x = numBR(v); if (isNaN(x)) throw new Error('Valor inválido em ' + n + '.'); linhas.push({ analito: n, equipamento: eq, valor_medido: x }); });
+    if (linhas.length < AN_HEMO.length) throw new Error('Preencha os ' + AN_HEMO.length + ' parâmetros do hemograma (' + (AN_HEMO.length - linhas.length) + ' faltando).');
+    var agora = new Date().toISOString();
+    await DB.addRegistros([{ origem: 'CQPendentes', form: '', titulo: 'Controle analítico · Hema repet', unidade: '', periodo: '', dia: dia, item: am, usuario: DB.user.nome, criado_em: agora, dados: { id: 'QP' + Date.now().toString(36).toUpperCase(), tipo: 'HEMA_REPET', data: dia, amostra: am, usuario: DB.user.nome, registrado_em: agora, labs_json: JSON.stringify(['Reanálise']), linhas_json: JSON.stringify(linhas), feito_json: '[]', status: 'PENDENTE', observacao: $('hm-obs').value.trim(), atualizado_em: agora } }]);
+    DB.log('hema', dia + ' amostra ' + am); await carregar(); render(); toast('Amostra registrada. A reanálise aparece pendente no próximo dia de funcionamento.');
+  }
   function pgHoje() {
-    var dia = S.rdData || hoje(), tf = tempsFeitas(dia), o = '<div class="barra"><label class="hj-dt">Data do registro <input type="date" id="rd-data" value="' + dia + '" max="' + hoje() + '"></label><button class="btn s p" data-rdhoje>Hoje</button><span style="color:var(--mut);font-size:.8rem">Você pode lançar um dia que ficou para trás.</span></div><div class="hj-lista">';
+    var dia = S.rdData || hoje(), tf = tempsFeitas(dia), o = '<div class="barra"><label class="hj-dt">Data do registro <input type="date" id="rd-data" value="' + dia + '" max="' + hoje() + '"></label><button class="btn s p" data-rdhoje>Hoje</button><span style="color:var(--mut);font-size:.8rem">Você pode lançar um dia que ficou para trás.</span></div><div class="hj-lista">' + painelAtrasos();
     o += '<div class="vidro hj-it ' + (tf.total && tf.n >= tf.total ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Temperatura das geladeiras</b><small>' + (tf.total ? tf.n + ' de ' + tf.total + ' equipamentos registrados nesta data' : 'Nenhum equipamento cadastrado') + '</small></div><button class="btn s p" data-rdtab="temp">' + (tf.n >= tf.total ? 'Ver' : 'Registrar') + '</button></div>';
-    o += cartaoFiaHoje(dia, DB.pode('escrever'));
+    o += cartaoFiaHoje(dia, DB.pode('escrever')) + cartaoHema(dia, DB.pode('escrever'));
     window.Q2_ROTINA.forEach(function (it, i) {
+      if (it.desde && dia < it.desde) return;
       var f = rotinaFeita(it, dia), pode = DB.pode('escrever');
       o += '<div class="vidro hj-it ' + (f ? 'ok' : 'pend') + '" data-hjcard="' + i + '"><span class="hj-pt"></span><div class="hj-t"><b>' + h(it.t) + '</b><small>' + h(it.form) + ' · ' + h(it.item) + (it.unidade !== 'Matriz' ? ' · ' + h(it.unidade) : '') + (f ? ' · registrado por ' + h(f.usuario || '—') : '') + '</small></div>' +
         (f ? '<button class="btn s p" data-regver2="' + f.id + '">Ver registro</button>' : (pode ? '<button class="btn s" data-hjabrir="' + i + '">Preencher</button>' : '')) +
@@ -728,7 +834,12 @@
           return '<label class="cmp hj-c"><span>' + h(c.label) + (c.min != null ? ' <i>(' + c.min + ' a ' + c.max + ')</i>' : '') + '</span><input ' + (c.tipo === 'numero' ? 'inputmode="decimal"' : '') + ' data-hjf="' + c.id + '"></label>';
         }).join('') + '</div><div class="bt"><button class="btn" data-hjsalvar="' + i + '">Registrar</button></div></div>') + '</div>';
     });
-    return o + '</div>';
+    TAREFAS.forEach(function (t) {
+      if (t.freq !== 'diaria' || (t.desde && dia < t.desde) || !ehDiaFunc(dia)) return;
+      var f = tarefaFeita(t, dia, dia), i = TAREFAS.indexOf(t);
+      o += '<div class="vidro hj-it ' + (f ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>' + h(t.t) + ' <span class="selo P" style="margin-left:6px">diária</span></b><small>' + h(t.ref) + ' · ' + h(t.resp) + (f ? ' · feita por ' + h(f.usuario || '—') : '') + '</small></div>' + (f || !DB.pode('escrever') ? '' : '<button class="btn s p" data-tffeita="' + i + '" data-tfdia="' + dia + '">Marcar como feita</button>') + '</div>';
+    });
+    return o + '</div>' + secaoTarefas();
   }
   async function salvarRotina(i) {
     var it = window.Q2_ROTINA[i], dia = S.rdData || hoje(), card = document.querySelector('[data-hjcard="' + i + '"]'), dados = {}, fora = [], marcou = false, mediu = false;
@@ -819,7 +930,7 @@
   function pgRegistros() {
     var tab = S.rdTab || 'hoje', dia = S.rdia || hoje(), o = topo('Registros do dia', 'Tudo o que se preenche na rotina do laboratório');
     function aba(id, ic, t, d, extra) { return '<button type="button" class="vidro pad rd-card' + (tab === id ? ' on' : '') + '" data-rdtab="' + id + '"><span class="rd-ic">' + ic + '</span><b>' + t + (extra || '') + '</b><small>' + d + '</small></button>'; }
-    var ph = pendHoje(S.rdData || hoje());
+    var ph = pendHoje(S.rdData || hoje()) + atrasos().reduce(function (s, x) { return s + x.itens.length; }, 0) + tarefasAtrasadas().length;
     o += '<div class="anim rd-tabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">' + aba('hoje', '✅', 'O que preencher hoje', 'Limpeza, temperatura e umidade, geladeiras', ph ? '<em class="rd-n">' + ph + '</em>' : '') + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') +
       '<button type="button" class="vidro pad rd-card" data-ir="frm"><span class="rd-ic">✎</span><b>Outros formulários</b><small>Todos os formulários e controles da qualidade</small></button><button type="button" class="vidro pad rd-card" data-ir="cq"><span class="rd-ic">◔</span><b>Variação dos resultados</b><small>Controle analítico: tabela, gráfico e relatório</small></button><button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
     if (tab === 'hoje') o += pgHoje();
@@ -980,6 +1091,11 @@
     if ((a = t.closest('[data-hjsalvar]'))) { try { await salvarRotina(Number(a.dataset.hjsalvar)); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-regver2]'))) { var rg = S.d.regs.filter(function (x) { return String(x.id) === a.dataset.regver2; })[0]; if (rg) { S.reg = { chave: rg.form || rg.titulo, q: '', mes: '', id: rg.id }; return irPara('regs'); } return; }
     if (t.closest('[data-rdhoje]')) { S.rdData = hoje(); return render(); }
+    if ((a = t.closest('[data-tffeita]'))) { S.tfDia = a.dataset.tfdia || ''; return modalTarefa(Number(a.dataset.tffeita)); }
+    if ((a = t.closest('[data-tfform]'))) { S.frm = { cod: a.dataset.tfform, q: '' }; return irPara('frm'); }
+    if ((a = t.closest('[data-rdir]'))) { S.rdData = a.dataset.rdir; return render(); }
+    if (t.closest('[data-hmsalvar]')) { try { await salvarHema(); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-rdsemexp]'))) { var dsx = a.dataset.rdsemexp, mot = prompt('Por que não houve expediente em ' + MD.fmtData(dsx) + '? (feriado, recesso, etc. — fica registrado)'); if (!mot || !mot.trim()) return; try { await DB.addRegistros([{ origem: 'SemExpediente', form: '', titulo: 'Dia sem expediente', unidade: '', periodo: dsx.slice(0, 7), dia: dsx, item: mot.trim(), usuario: DB.user.nome, criado_em: new Date().toISOString(), dados: { motivo: mot.trim() } }]); DB.log('sem-expediente', dsx + ' ' + mot.trim()); await carregar(); render(); toast('Dia marcado como sem expediente.'); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-rdtab]'))) { S.rdTab = a.dataset.rdtab; return render(); }
     if ((a = t.closest('[data-apabrir]'))) { a.closest('.ap-card').classList.toggle('aberto'); return; }
     if ((a = t.closest('[data-apsalvar]'))) { try { await salvarApoio(a.dataset.apsalvar); } catch (er) { toast(er.message, 1); } return; }
