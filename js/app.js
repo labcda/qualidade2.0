@@ -10,7 +10,7 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-09b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-10a';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
@@ -24,13 +24,13 @@
     for (var i = 0; i < docs.length; i++) {
       var n = docs[i], ex = jaTem[n.codigo + '|' + n.titulo + '|' + n.unidade];
       if (!ex) { novos.push(n); continue; }
-      if (ex.status !== 'rascunho') { preservados++; continue; }
       if ((ex.texto || '') === n.texto) continue;
-      try { await DB.addVersao({ doc_id: ex.id, versao: ex.versao, status: ex.status, texto: ex.texto, autor: 'Sistema', motivo: 'Texto anterior à reescrita de ' + '09/11/2026' }); } catch (e) { }
-      novos.push(Object.assign({}, n, { elaborador: ex.elaborador || n.elaborador, data_elaboracao: ex.data_elaboracao || n.data_elaboracao })); mudados++;
+      /* texto novo da biblioteca substitui o antigo mesmo em documento já em revisão/vigente; situação, versão e assinaturas ficam como estão e o texto anterior vai para o histórico de versões */
+      try { await DB.addVersao({ doc_id: ex.id, versao: ex.versao, status: ex.status, texto: ex.texto, autor: 'Sistema', motivo: 'Texto anterior à reescrita de 10/11/2026' }); } catch (e) { }
+      novos.push(Object.assign({}, ex, { texto: n.texto })); mudados++;
     }
     await DB.saveDocs(novos);
-    if (!silencioso) toast('Biblioteca atualizada: ' + novos.length + ' documento(s) novo(s) ou reescrito(s); ' + preservados + ' já em revisão/vigente (texto atual mantido).');
+    if (!silencioso) toast('Biblioteca atualizada: ' + novos.length + ' documento(s) novo(s) ou reescrito(s) (' + mudados + ' com texto atualizado; o texto anterior ficou no histórico de versões).');
     var resp = REQ.filter(function (r) { return !S.d.resp[r[0]]; }).map(function (r) { return { codigo: r[0], resposta: r[5], constatacao: r[9] || '', futuro: !!r[7], atualizado_por: 'Autoavaliação Unimed (06/11/2026)' }; });
     if (resp.length) await DB.saveRespostas(resp);
     await carregar(); if (!silencioso) render();
@@ -525,12 +525,14 @@
     if (I.novo) return ncFormNovo(I);
     if (I.rel && I.id) { var rr = S.d.nc.filter(function (x) { return x.id === I.id; })[0]; if (rr) return ncRel(rr); }
     if (I.id) { var r = S.d.nc.filter(function (x) { return x.id === I.id; })[0]; if (r) return ncDetalhe(r, I); I.id = null; }
-    var lista = S.d.nc.filter(function (x) { return (I.f === 'todas' || (I.f === 'encerradas' ? x.status === 'encerrada' : x.status !== 'encerrada')) && (!I.ft || x.tipo === I.ft); });
-    var abertas = S.d.nc.filter(function (x) { return x.status !== 'encerrada'; }), atras = S.d.nc.filter(ncAtraso);
-    var o = topo('Não conformidades e eventos', 'Registro, análise da causa, plano de ação e verificação de eficácia', pode ? '<button class="btn" data-ncnovo>＋ Nova ocorrência</button>' : '');
-    o += '<div class="grade g4" style="margin-bottom:14px">' + [['Abertas', abertas.length, '#0e9aa7'], ['Com prazo vencido', atras.length, atras.length ? '#dc2626' : '#16a34a'], ['Encerradas', S.d.nc.length - abertas.length, '#16a34a'], ['Total', S.d.nc.length, '#64748b']].map(function (k) { return '<div class="vidro pad kpi"><span style="color:' + k[2] + '">' + k[1] + '</span><small>' + k[0] + '</small></div>'; }).join('') + '</div>';
-    o += '<div class="barra"><div class="chips">' + [['abertas', 'Em aberto'], ['encerradas', 'Encerradas'], ['todas', 'Todas']].map(function (c) { return '<button class="chip' + (I.f === c[0] ? ' on' : '') + '" data-ncf="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div><select id="nc-ftipo"><option value="">Todos os tipos</option>' + Object.keys(NC_TIPO).map(function (k) { return '<option value="' + k + '"' + (I.ft === k ? ' selected' : '') + '>' + NC_TIPO[k] + '</option>'; }).join('') + '</select></div>';
-    if (!lista.length) return o + '<div class="vazio">' + (S.d.nc.length ? 'Nenhuma ocorrência neste filtro.' : 'Nenhuma ocorrência registrada. Toda não conformidade, incidente ou evento adverso é registrado aqui por quem o identificou.') + '</div>';
+    /* qualquer colaborador registra a sua ocorrência; quem analisa e encerra é o RT / NSP / Qualidade (perfis com escrita). Os demais só veem as suas. */
+    var base = pode ? S.d.nc : S.d.nc.filter(function (x) { return x.aberto_por === DB.user.nome; });
+    var lista = base.filter(function (x) { return (I.f === 'todas' || (I.f === 'fila' ? x.status === 'aberta' : I.f === 'encerradas' ? x.status === 'encerrada' : x.status !== 'encerrada')) && (!I.ft || x.tipo === I.ft); });
+    var abertas = base.filter(function (x) { return x.status !== 'encerrada'; }), atras = base.filter(ncAtraso), fila = base.filter(function (x) { return x.status === 'aberta'; });
+    var o = topo('Não conformidades e eventos', pode ? 'Ocorrências registradas pelos colaboradores: análise da causa, plano de ação e encerramento pelo RT e NSP' : 'Registre aqui a sua ocorrência; o RT e o NSP analisam e definem o plano de ação', '<button class="btn" data-ncnovo>＋ Nova ocorrência</button>');
+    o += '<div class="grade g4" style="margin-bottom:14px">' + (pode ? [['Aguardando análise (RT/NSP)', fila.length, fila.length ? '#d97706' : '#16a34a'], ['Abertas', abertas.length, '#0e9aa7'], ['Com prazo vencido', atras.length, atras.length ? '#dc2626' : '#16a34a'], ['Encerradas', base.length - abertas.length, '#16a34a']] : [['Suas abertas', abertas.length, '#0e9aa7'], ['Encerradas', base.length - abertas.length, '#16a34a'], ['Total', base.length, '#64748b']]).map(function (k) { return '<div class="vidro pad kpi"><span style="color:' + k[2] + '">' + k[1] + '</span><small>' + k[0] + '</small></div>'; }).join('') + '</div>';
+    o += '<div class="barra"><div class="chips">' + (pode ? [['fila', 'Aguardando análise'], ['abertas', 'Em aberto'], ['encerradas', 'Encerradas'], ['todas', 'Todas']] : [['abertas', 'Em aberto'], ['encerradas', 'Encerradas'], ['todas', 'Todas']]).map(function (c) { return '<button class="chip' + (I.f === c[0] ? ' on' : '') + '" data-ncf="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div><select id="nc-ftipo"><option value="">Todos os tipos</option>' + Object.keys(NC_TIPO).map(function (k) { return '<option value="' + k + '"' + (I.ft === k ? ' selected' : '') + '>' + NC_TIPO[k] + '</option>'; }).join('') + '</select></div>';
+    if (!lista.length) return o + '<div class="vazio">' + (base.length ?'Nenhuma ocorrência neste filtro.' : 'Nenhuma ocorrência registrada. Toda não conformidade, incidente ou evento adverso é registrado aqui por quem o identificou.') + '</div>';
     return o + '<div class="vidro pad" style="overflow:auto"><table><thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Setor</th><th>Descrição</th><th>Situação</th><th></th></tr></thead><tbody>' + lista.map(function (x) { return '<tr><td><b>' + h(x.numero) + '</b></td><td>' + h(NC_TIPO[x.tipo] || x.tipo) + '</td><td>' + MD.fmtData(x.data) + '</td><td>' + h(x.setor || '') + '</td><td>' + h((x.descricao || '').slice(0, 90)) + ((x.descricao || '').length > 90 ? '…' : '') + '</td><td>' + ncBadge(x) + '</td><td><button class="btn s" data-ncabrir="' + h(x.id) + '">Abrir</button></td></tr>'; }).join('') + '</tbody></table></div>';
   }
   function ncFormNovo(I) {
@@ -551,6 +553,8 @@
   function ncDetalhe(r, I) {
     var pode = DB.pode('escrever'), fecha = DB.pode('aprovar'), enc = r.status === 'encerrada', ed = pode && !enc, evt = r.tipo !== 'nc';
     var o = '<button class="voltar" data-ncvolta>← Voltar à lista</button><div class="barra-doc topo"><h1>' + h(r.numero) + '<small>' + h(NC_TIPO[r.tipo] || r.tipo) + ' · ' + MD.fmtData(r.data) + ' · ' + h(r.setor || '') + '</small></h1><button class="btn" data-ncrel>🖨 Relatório</button></div>';
+    if (!pode && !enc) o += '<p class="hj-av">Sua ocorrência foi enviada ao <b>Responsável Técnico e ao NSP</b>, que fazem a análise da causa, definem o plano de ação e encerram. Você acompanha a situação por aqui.</p>';
+    else if (pode && r.status === 'aberta') o += '<p class="hj-av" style="background:#fef3c7;color:#92400e">Ocorrência <b>aguardando análise</b> do RT / NSP. Preencha a causa e o plano de ação e use “Avançar”.</p>';
     var etapas = ['aberta', 'em_analise', 'em_acao', 'verificacao', 'encerrada'], at = etapas.indexOf(r.status);
     o += '<div class="nc-passos">' + etapas.map(function (e, i) { return '<span class="' + (i < at ? 'feito' : i === at ? 'atual' : '') + '">' + NC_ST[e] + '</span>'; }).join('') + '</div>';
     if (r.tipo === 'never' || r.gravidade === 'Óbito' || r.gravidade === 'Dano grave') o += '<p class="hj-av" style="background:#fee2e2;color:#991b1b">Evento grave: notificar o NOTIVISA em até 72 horas e abrir a investigação detalhada (FR 045) em até 60 dias, conforme o PQ 014 e o PQ 070.</p>';

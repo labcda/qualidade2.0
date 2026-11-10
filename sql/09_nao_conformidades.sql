@@ -24,3 +24,8 @@ create policy "q2_nc_ler" on q2_nc for select to authenticated using (q2_papel()
 drop policy if exists "q2_nc_esc" on q2_nc;
 create policy "q2_nc_esc" on q2_nc for all to authenticated
   using (q2_papel() in ('admin','elabora','revisa','aprova')) with check (q2_papel() in ('admin','elabora','revisa','aprova'));
+
+-- Qualquer colaborador com acesso ao sistema (inclusive perfil "consulta") registra a SUA ocorrência.
+-- Analisar, definir plano de ação, avançar e encerrar continua restrito a admin/elabora/revisa/aprova (RT, NSP, Qualidade).
+drop policy if exists "q2_nc_novo" on q2_nc;
+create policy "q2_nc_novo" on q2_nc for insert to authenticated with check (q2_papel() is not null);

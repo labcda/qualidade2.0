@@ -214,3 +214,7 @@ drop policy if exists "q2_ciencias_esc" on q2_ciencias;
 create policy "q2_ciencias_esc" on q2_ciencias for all to authenticated
   using (q2_papel() in ('admin','elabora','revisa','aprova')) with check (q2_papel() in ('admin','elabora','revisa','aprova'));
 
+
+-- Ocorrências: qualquer colaborador registra a sua (RT/NSP analisam e encerram)
+drop policy if exists "q2_nc_novo" on q2_nc;
+create policy "q2_nc_novo" on q2_nc for insert to authenticated with check (q2_papel() is not null);

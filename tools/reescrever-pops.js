@@ -94,6 +94,7 @@ const FRASES = [
   ['PQ 022', 'uma cópia é arquivada no dossiê do funcionário.', 'uma cópia digitalizada é anexada ao registro de treinamento do funcionário no sistema.'],
   ['PQ 069', '### 5.5 Comunicação e análise', '### 5.4 Comunicação e análise'],
   ['MQ 002', 'pode ser feita verbalmente a um membro do NSP responsável pelo recebimento, ou por meio do FR 038 - Incidentes e Eventos Adversos, de livre e fácil acesso na nuvem.', 'é feita pelo próprio profissional, diretamente no sistema da Qualidade (Não conformidades › Nova ocorrência, que substitui o FR 038 - Incidentes e Eventos Adversos), de livre e fácil acesso a todos os colaboradores.'],
+  ['PQ 038', 'Por definição do NSP, toda notificação deve ser levada de forma verbal a algum membro do NSP e o mesmo ficará responsável pela notificação no NOTIVISA.', 'Toda notificação é registrada pelo próprio colaborador no sistema (Não conformidades › Nova ocorrência); o Responsável Técnico e o NSP recebem a ocorrência na fila de análise e ficam responsáveis pela notificação no NOTIVISA.'],
   ['PQ 038', 'comunicar verbalmente ao NSP qualquer incidente ou evento adverso e preencher o formulário interno.', 'registrar no sistema (Não conformidades › Nova ocorrência) qualquer incidente ou evento adverso que identificar, no mesmo dia; o aviso verbal ao NSP não substitui o registro.'],
   ['PQ 010', 'Depois de digitadas, as planilhas são arquivadas.', 'Depois de digitadas, as planilhas são digitalizadas e anexadas ao registro no sistema da Qualidade (PQ 003).'],
   ['PQ 017', 'O certificado tem pasta própria para guarda.', 'O certificado é digitalizado e anexado ao cadastro do instrumento no sistema da Qualidade (Equipamentos); o original fica guardado em pasta própria.'],
@@ -136,13 +137,14 @@ const MAO = {
 - O sistema numera cada ocorrência (OC aaaa-nnn), registra data, hora, usuário, setor e unidade, e guarda o histórico de tudo o que foi feito nela.
 ### 5.1 Não conformidades
 - Fluxo no sistema: Aberta → Em análise (causa raiz) → Ações em andamento (o que, quem e até quando) → Verificação de eficácia → Encerrada.
-- O chefe do setor, com o Supervisor de Qualidade, analisa a causa e define as ações. Ações com prazo vencido aparecem destacadas no sistema e são acompanhadas pelo Supervisor de Qualidade.
-- O encerramento exige a verificação de eficácia das ações e é feito pelo Responsável Técnico ou pela Diretoria, com identificação eletrônica e data.
+- Ao ser registrada, a ocorrência vai automaticamente para a fila de análise do Responsável Técnico e do NSP (situação "Aguardando análise"), que acompanham todas as ocorrências no sistema.
+- O Responsável Técnico e o NSP analisam a ocorrência, registram a causa raiz e montam o plano de ação (o que, quem e até quando), com o apoio do chefe do setor. Ações com prazo vencido aparecem destacadas no sistema e são acompanhadas pela Qualidade.
+- O encerramento exige a verificação de eficácia das ações e é feito pelo Responsável Técnico ou pela Diretoria, com identificação eletrônica e data. Quem registrou a ocorrência acompanha a situação pelo próprio login.
 - Periodicamente o NSP e a Qualidade analisam as ocorrências abertas e as recidivas, que são tratadas com ênfase. Reuniões e exposições à equipe são registradas em ata no sistema (FR 023), com os participantes identificados.
 ### 5.2 Incidentes e eventos adversos
-- Os incidentes e eventos adversos são registrados no sistema pelo próprio colaborador que os identificou ou presenciou, com a gravidade e o impacto para o paciente. As ocorrências abertas ficam visíveis ao NSP na lista de Não conformidades.
+- Os incidentes e eventos adversos são registrados no sistema pelo próprio colaborador que os identificou ou presenciou, com o seu login, informando a gravidade e o impacto para o paciente. Nenhum membro do NSP abre a ocorrência por outra pessoa: cada colaborador registra a sua. A ocorrência vai direto para a tela do Responsável Técnico e do NSP.
 - Outra forma de identificação são as visitas técnicas de observação feitas pelo NSP quando julgar necessário; nesse caso o próprio membro do NSP registra a ocorrência no sistema.
-- O NSP analisa as ocorrências abertas no sistema, classifica a gravidade, decide sobre a notificação no NOTIVISA e registra a situação e o protocolo na própria ocorrência.
+- O Responsável Técnico e o NSP analisam as ocorrências na fila do sistema, classificam a gravidade, registram a causa e o plano de ação, decidem sobre a notificação no NOTIVISA (situação e protocolo na própria ocorrência) e finalizam a ocorrência após a verificação de eficácia.
 - O NSP se reúne mensalmente, ou quando julgar necessário, para analisar as ocorrências e definir ações. A ata é registrada no sistema (FR 023), com os presentes identificados.
 - Quando necessário, o NSP leva as ocorrências à Diretoria e aos chefes de setores para definir ações que impeçam novos incidentes e eventos adversos.
 ### 5.3 Never Events
