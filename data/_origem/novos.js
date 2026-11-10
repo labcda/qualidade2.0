@@ -167,7 +167,7 @@ Definir como funcionam as comissões obrigatórias e de apoio à gestão do CDA 
 - **NSP:** Núcleo de Segurança do Paciente, instância que promove e apoia ações de segurança do paciente (RDC 36/2013). Funcionamento detalhado no PQ 032.
 
 ## 4 Responsabilidades
-- **Diretoria:** nomear o designado e os membros do NSP por portaria ou ato de nomeação (FR 016), garantir tempo e recursos para as reuniões.
+- **Diretoria:** nomear o designado de CIPA (FR 016) e os membros e o Coordenador do NSP (FR 087 - Termo de Nomeação do NSP, preenchido no sistema), garantir tempo e recursos para as reuniões.
 - **Designado de CIPA:** identificar riscos ocupacionais, propor medidas, participar das investigações de acidentes e dos treinamentos, registrar as reuniões.
 - **Coordenador do NSP:** convocar reuniões, conduzir a pauta e acompanhar as pendências.
 - **Supervisor de Qualidade:** manter o cronograma, as atas e o acompanhamento de pendências.
