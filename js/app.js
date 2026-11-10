@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false, hema: [] }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false, hema: [], hemaPend: [] }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-09b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || [];
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || [];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -714,7 +714,7 @@
   /* ---------- O que preencher hoje (formulários de rotina diária) ---------- */
   function rotinaFeita(it, dia) { return S.d.regs.filter(function (r) { return r.origem === 'Registros' && r.form === it.form && r.item === it.item && (r.unidade || 'Matriz') === it.unidade && r.dia === dia; })[0]; }
   function tempsFeitas(dia) { var eq = S.d.equip; return { n: eq.filter(function (e) { return S.d.temps.some(function (t) { return t.equip_id === e.id && t.dia === dia; }); }).length, total: eq.length }; }
-  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !(it.desde && dia < it.desde) && !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n) + (fiaDaSemana(dia) ? 0 : 1) + (ehDiaFunc(dia) && !hemaDoDia(dia) ? 1 : 0) + (ehDiaFunc(dia) ? TAREFAS.filter(function (t) { return t.freq === 'diaria' && !(t.desde && dia < t.desde) && !tarefaFeita(t, dia, dia); }).length : 0); }
+  function pendHoje(dia) { var p = window.Q2_ROTINA.filter(function (it) { return !(it.desde && dia < it.desde) && !rotinaFeita(it, dia); }).length, t = tempsFeitas(dia); return p + (t.total - t.n) + (fiaDaSemana(dia) ? 0 : 1) + (ehDiaFunc(dia) && !hemaDoDia(dia) ? 1 : 0) + (ehDiaFunc(dia) && !hemaComparada(diaAnteriorFunc(dia)) ? 1 : 0) + (ehDiaFunc(dia) ? TAREFAS.filter(function (t) { return t.freq === 'diaria' && !(t.desde && dia < t.desde) && !tarefaFeita(t, dia, dia); }).length : 0); }
   /* ---------- rotinas periódicas e prazos (diária, semanal, quinzenal, mensal, trimestral, semestral, anual) ---------- */
   var TAREFAS = [
     { t: 'Controle interno da bioquímica no A15 (BioSystems e PNCQ), antes da rotina', ref: 'PQ 006 · ITA 013', freq: 'diaria', resp: 'Técnico da bancada', desde: '2026-11-10' },
@@ -794,7 +794,8 @@
     var f = []; if (!ehDiaFunc(d) || semExpediente(d)) return f;
     window.Q2_ROTINA.forEach(function (it) { if (it.desde && d < it.desde) return; if (!rotinaFeita(it, d)) f.push(it.t); });
     S.d.equip.forEach(function (e) { if (!S.d.temps.some(function (t) { return t.equip_id === e.id && t.dia === d; })) f.push('Temperatura · ' + (e.nome || e.identificacao || e.codigo || 'equipamento')); });
-    if (!hemaDoDia(d)) f.push('Hematologia · amostra do dia (reanálise)');
+    if (!hemaDoDia(d)) f.push('Hematologia · amostra do dia (para a reanálise seguinte)');
+    if (!hemaComparada(diaAnteriorFunc(d))) f.push('Hematologia · comparação com a amostra do dia anterior');
     TAREFAS.forEach(function (t) { if (t.freq === 'diaria' && !(t.desde && d < t.desde) && !tarefaFeita(t, d, d)) f.push(t.t); });
     return f;
   }
@@ -803,12 +804,51 @@
     var a = atrasos(); if (!a.length) return ''; var pode = DB.pode('escrever');
     return '<div class="vidro pad hj-atraso"><b>⚠ Dias anteriores com registros que faltam</b><p>Nenhuma lacuna pode ficar sem explicação: lance o registro do dia ou, se o laboratório não funcionou, marque o dia como sem expediente.</p>' + a.map(function (x) { return '<div class="hj-atr-l"><div><b>' + diaExtenso(x.dia) + '</b><small>' + x.itens.map(h).join(' · ') + '</small></div><div class="hj-atr-b"><button class="btn s p" data-rdir="' + x.dia + '">Lançar este dia</button>' + (pode ? '<button class="btn s" data-rdsemexp="' + x.dia + '">Sem expediente</button>' : '') + '</div></div>'; }).join('') + '</div>';
   }
+  function diaAnteriorFunc(d) { var x = somaDias(d, -1), n = 0; while (!ehDiaFunc(x) && n++ < 7) x = somaDias(x, -1); return x; }
+  /* a comparação (amostra do dia anterior x reanálise de hoje) está feita para a amostra de "dataAmostra"? */
+  function hemaComparada(dataAmostra) { return S.d.hema.some(function (r) { return (r.origem === 'ControleAnalitico' ? r.dia : r.data) === dataAmostra && (r.origem === 'ControleAnalitico' || r.status === 'CONCLUIDO'); }); }
+  function varHema(an, o, r) { if (isNaN(o) || isNaN(r) || o === 0) return null; var vr = Math.round(((r - o) / o * 100) * 100) / 100, t = tolDe(an); return { vr: vr, fora: foraDe(an, o, r, vr), t: t }; }
+  function celVar(an, o, r) { var v = varHema(an, o, r); if (!v) return '<span style="color:var(--mut)">—</span>'; return '<b style="color:' + (v.fora ? '#dc2626' : '#16a34a') + '">' + (v.vr > 0 ? '+' : '') + String(v.vr).replace('.', ',') + '%</b> <small>' + (v.fora ? 'FORA' : 'ok') + '</small>'; }
   function cartaoHema(dia, pode) {
-    var ok = hemaDoDia(dia), pend = hemaPend(dia), o = '';
-    o += '<div class="vidro hj-it ' + (ok ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Hematologia · amostra do dia <span class="selo P" style="margin-left:6px">diário</span></b><small>' + (ok ? 'Amostra registrada nesta data' : 'Registre os valores originais de uma amostra do dia (Sysmex KX ou Zybio Z3). No dia seguinte ela é reanalisada e a variação é calculada.') + '</small></div>' + (ok || !pode ? '' : '<button class="btn s" data-hjabrir="hema">Preencher</button>') +
-      (ok ? '' : '<div class="hj-form"><div class="hj-campos"><label class="cmp"><span>Identificação da amostra <i class="obr">*</i></span><input id="hm-am" placeholder="Ex.: número do atendimento"></label><label class="cmp"><span>Equipamento</span><select id="hm-eq"><option>Sysmex KX</option><option>Zybio Z3</option></select></label>' + AN_HEMO.map(function (n, i) { return '<label class="cmp hj-c"><span>' + h(n) + '</span><input inputmode="decimal" data-hmv="' + i + '"></label>'; }).join('') + '<label class="cmp"><span>Observação</span><input id="hm-obs"></label></div><div class="bt"><button class="btn" data-hmsalvar>Registrar amostra</button></div></div>') + '</div>';
-    o += '<div class="vidro hj-it ' + (pend.length ? 'pend' : 'ok') + '"><span class="hj-pt"></span><div class="hj-t"><b>Hematologia · reanálise da amostra do dia anterior</b><small>' + (pend.length ? 'Pendente: amostra de ' + MD.fmtData(pend[0].data) + (pend.length > 1 ? ' e mais ' + (pend.length - 1) : '') + '. Digite o resultado da reanálise.' : 'Nenhuma reanálise pendente') + '</small></div>' + (pend.length ? '<button class="btn s" data-rdtab="apoio">Digitar reanálise</button>' : '') + '</div>';
+    var prev = diaAnteriorFunc(dia), pend = S.d.hemaPend.filter(function (r) { return r.dados && r.dados.data < dia; }).sort(function (x, y) { return x.dados.data < y.dados.data ? -1 : 1; })[0];
+    var comp = pend ? false : hemaComparada(prev), amostraHoje = hemaDoDia(dia), o = '';
+    var lin = pend ? jsonSeg(pend.dados.linhas_json, []) : [], eqp = pend ? ((lin[0] || {}).equipamento || '') : '';
+    var dataOrig = pend ? pend.dados.data : prev;
+    var tabela = '<div class="hm-tab"><div class="hm-th"><span>Parâmetro</span><span>Dia anterior (original)</span><span>Hoje (reanálise)</span><span>Variação</span><span>Limite</span></div>' + AN_HEMO.map(function (n, i) {
+      var l = lin.filter(function (x) { return x.analito === n; })[0], t = tolDe(n);
+      return '<div class="hm-tr"><b>' + h(n) + '</b><input inputmode="decimal" data-hmc="' + i + '" data-hmo="1" value="' + (l ? h(String(l.valor_medido).replace('.', ',')) : '') + '"' + (l ? ' readonly' : '') + ' placeholder="original"><input inputmode="decimal" data-hmc="' + i + '" data-hmr="1" placeholder="reanálise"><span data-hmvar="' + i + '">—</span><small>' + h(limiteTxt(t)) + '</small></div>';
+    }).join('') + '</div>';
+    o += '<div class="vidro hj-it ' + (comp ? 'ok' : 'pend') + ' aberto"><span class="hj-pt"></span><div class="hj-t"><b>Hematologia · amostra do dia anterior × reanálise de hoje <span class="selo P" style="margin-left:6px">diário</span></b><small>' + (comp ? 'Comparação da amostra de ' + MD.fmtData(prev) + ' já registrada.' : pend ? 'Amostra ' + h(pend.dados.amostra) + ' de ' + MD.fmtData(pend.dados.data) + (eqp ? ' (' + h(eqp) + ')' : '') + ': digite a reanálise de hoje. A variação aparece na hora e o limite é de ±10% (tabela de tolerância por analito).' : 'Digite os valores originais do dia anterior e a reanálise de hoje: a variação é calculada na hora (limite ±10%).') + '</small></div>' +
+      (comp || !pode ? '' : '<div class="hj-form" style="display:block" data-hmcomp="' + h(pend ? pend.id : '') + '"><div class="hj-campos"><label class="cmp"><span>Identificação da amostra <i class="obr">*</i></span><input id="hc-am" value="' + h(pend ? pend.dados.amostra : '') + '"' + (pend ? ' readonly' : '') + '></label><label class="cmp"><span>Data da amostra original</span><input type="date" id="hc-dt" value="' + dataOrig + '" max="' + hoje() + '"' + (pend ? ' readonly' : '') + '></label><label class="cmp"><span>Equipamento</span><select id="hc-eq">' + ['Sysmex KX', 'Zybio Z3'].map(function (x) { return '<option' + (x === eqp ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></label></div>' + tabela + '<label class="cmp" style="margin-top:10px"><span>Ação corretiva (obrigatória se algum parâmetro ficar fora do limite)</span><input id="hc-acao"></label><div class="bt"><button class="btn" data-hmcomps>Salvar comparação</button></div></div>') + '</div>';
+    o += '<div class="vidro hj-it ' + (amostraHoje ? 'ok' : 'pend') + '"><span class="hj-pt"></span><div class="hj-t"><b>Hematologia · amostra de hoje (para a reanálise de amanhã)</b><small>' + (amostraHoje ? 'Amostra de hoje registrada.' : 'Registre os valores originais de uma amostra de hoje. Amanhã ela é reanalisada e comparada.') + '</small></div>' + (amostraHoje || !pode ? '' : '<button class="btn s" data-hjabrir="hema">Preencher</button>') +
+      (amostraHoje ? '' : '<div class="hj-form"><div class="hj-campos"><label class="cmp"><span>Identificação da amostra <i class="obr">*</i></span><input id="hm-am" placeholder="Ex.: número do atendimento"></label><label class="cmp"><span>Equipamento</span><select id="hm-eq"><option>Sysmex KX</option><option>Zybio Z3</option></select></label>' + AN_HEMO.map(function (n, i) { return '<label class="cmp hj-c"><span>' + h(n) + '</span><input inputmode="decimal" data-hmv="' + i + '"></label>'; }).join('') + '<label class="cmp"><span>Observação</span><input id="hm-obs"></label></div><div class="bt"><button class="btn" data-hmsalvar>Registrar amostra de hoje</button></div></div>') + '</div>';
     return o;
+  }
+  /* variação ao vivo na tabela de comparação */
+  function hemaAoVivo(inp) {
+    var i = inp.dataset.hmc, box = inp.closest('.hm-tr'); if (!box) return;
+    var o = numBR(box.querySelector('[data-hmo]').value), r = numBR(box.querySelector('[data-hmr]').value);
+    box.querySelector('[data-hmvar]').innerHTML = celVar(AN_HEMO[i], o, r);
+  }
+  async function salvarHemaComp(dia) {
+    var box = document.querySelector('[data-hmcomp]'), pendId = box.dataset.hmcomp, pend = pendId ? S.d.hemaPend.filter(function (r) { return String(r.id) === String(pendId); })[0] : null;
+    var am = $('hc-am').value.trim(), dt = $('hc-dt').value, eq = $('hc-eq').value, acao = $('hc-acao').value.trim();
+    if (!am) throw new Error('Informe a identificação da amostra.'); if (!dt) throw new Error('Informe a data da amostra original.');
+    var regs = [], fora = [], agora = new Date().toISOString(), grupo = 'Q' + Date.now().toString(36).toUpperCase(), feitos = [];
+    AN_HEMO.forEach(function (n, i) {
+      var linha = document.querySelector('.hm-tr [data-hmc="' + i + '"][data-hmo]').closest('.hm-tr'), vo = linha.querySelector('[data-hmo]').value.trim(), vr = linha.querySelector('[data-hmr]').value.trim();
+      if (!vo && !vr) return; if (!vo || !vr) throw new Error('Preencha o original e a reanálise de ' + n + '.');
+      var o = numBR(vo), r = numBR(vr); if (isNaN(o) || isNaN(r)) throw new Error('Valor inválido em ' + n + '.'); if (o === 0) throw new Error('O valor original de ' + n + ' é zero: não dá para calcular a variação.');
+      var v = varHema(n, o, r); if (v.fora) fora.push(n + ': ' + v.vr + '% (limite ' + limiteTxt(v.t) + ')'); feitos.push(n + '|Reanálise');
+      regs.push({ origem: 'ControleAnalitico', form: '', titulo: 'Controle analítico · Hema repet', unidade: '', periodo: '', dia: dt, item: n, usuario: DB.user.nome, criado_em: agora, dados: { id: 'CQ' + Date.now().toString(36).toUpperCase() + i, grupo: grupo, tipo: 'HEMA_REPET', data: dt, equipamento: eq, lab_apoio: '', amostra: am, analito: n, valor_ref: String(o), valor_medido: String(r), variacao_pct: String(v.vr), tolerancia_pct: String(v.t.pct), tolerancia_abs: v.t.abs === null ? '' : String(v.t.abs), situacao: v.fora ? 'FORA' : 'OK', usuario: DB.user.nome, acao_corretiva: acao, observacao: 'Reanálise feita em ' + dia, registrado_em: agora, anulado: '', motivo_anulacao: '' } });
+    });
+    if (!regs.length) throw new Error('Digite os valores do dia anterior e da reanálise.');
+    if (regs.length < AN_HEMO.length) throw new Error('Preencha os ' + AN_HEMO.length + ' parâmetros do hemograma (' + (AN_HEMO.length - regs.length) + ' faltando).');
+    if (fora.length && !acao) throw new Error('Há ' + fora.length + ' parâmetro(s) fora do limite (' + fora.join('; ') + '). Descreva a ação corretiva.');
+    await DB.addRegistros(regs);
+    if (pend) await DB.updRegistro(pend.id, { dados: Object.assign({}, pend.dados, { feito_json: JSON.stringify(feitos), status: 'CONCLUIDO', atualizado_em: agora }) });
+    DB.log('hema', 'comparação ' + dt + ' ' + am + (fora.length ? ' (fora do limite)' : '')); await carregar(); render();
+    toast(fora.length ? 'Comparação salva: ' + fora.length + ' parâmetro(s) fora do limite.' : 'Comparação salva: todos dentro do limite.', fora.length ? 1 : 0);
   }
   async function salvarHema() {
     var dia = S.rdData || hoje(), am = $('hm-am').value.trim(); if (hemaDoDia(dia)) throw new Error('A amostra de hematologia desta data já foi registrada.');
@@ -1094,6 +1134,7 @@
     if ((a = t.closest('[data-tffeita]'))) { S.tfDia = a.dataset.tfdia || ''; return modalTarefa(Number(a.dataset.tffeita)); }
     if ((a = t.closest('[data-tfform]'))) { S.frm = { cod: a.dataset.tfform, q: '' }; return irPara('frm'); }
     if ((a = t.closest('[data-rdir]'))) { S.rdData = a.dataset.rdir; return render(); }
+    if (t.closest('[data-hmcomps]')) { try { await salvarHemaComp(S.rdData || hoje()); } catch (er) { toast(er.message, 1); } return; }
     if (t.closest('[data-hmsalvar]')) { try { await salvarHema(); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-rdsemexp]'))) { var dsx = a.dataset.rdsemexp, mot = prompt('Por que não houve expediente em ' + MD.fmtData(dsx) + '? (feriado, recesso, etc. — fica registrado)'); if (!mot || !mot.trim()) return; try { await DB.addRegistros([{ origem: 'SemExpediente', form: '', titulo: 'Dia sem expediente', unidade: '', periodo: dsx.slice(0, 7), dia: dsx, item: mot.trim(), usuario: DB.user.nome, criado_em: new Date().toISOString(), dados: { motivo: mot.trim() } }]); DB.log('sem-expediente', dsx + ' ' + mot.trim()); await carregar(); render(); toast('Dia marcado como sem expediente.'); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-rdtab]'))) { S.rdTab = a.dataset.rdtab; return render(); }
@@ -1131,6 +1172,7 @@
   document.addEventListener('input', function (e) {
     if (e.target.dataset && e.target.dataset.api !== undefined && e.target.dataset.apid) varApoio(e.target);
     if (e.target.id === 'nc-ftipo') { S.nc.ft = e.target.value; return render(); }
+    if (e.target.dataset && e.target.dataset.hmc !== undefined) { hemaAoVivo(e.target); return; }
     if (e.target.id === 'ind-ano') { S.ind.ano = Number(e.target.value); return render(); }
     if (e.target.id === 'fm-q') { S.frm = S.frm || { cod: '', q: '' }; S.frm.q = e.target.value; var p3 = e.target.selectionStart; render(); var n3 = $('fm-q'); if (n3) { n3.focus(); n3.setSelectionRange(p3, p3); } }
     if (e.target.id === 'rg-q') { S.reg.q = e.target.value; var pp = e.target.selectionStart; render(); var nn = $('rg-q'); if (nn) { nn.focus(); nn.setSelectionRange(pp, pp); } }

@@ -178,6 +178,10 @@
       if (demo) return (banco().regs || []).filter(function (r) { return (r.origem === 'ControleAnalitico' || r.origem === 'CQPendentes') && r.dados && r.dados.tipo === 'HEMA_REPET'; }).map(function (r) { return { origem: r.origem, dia: r.dia, data: r.dados.data, status: r.dados.status || '' }; });
       try { return await q(sb.from('q2_registros').select('origem,dia,data:dados->>data,status:dados->>status').in('origem', ['ControleAnalitico', 'CQPendentes']).eq('dados->>tipo', 'HEMA_REPET').order('dia', { ascending: false }).limit(5000)); } catch (e) { console.warn('[hema]', e.message || e); return []; }
     },
+    async hemaPendentes() {
+      if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'CQPendentes' && r.dados && r.dados.tipo === 'HEMA_REPET' && (r.dados.status === 'PENDENTE' || r.dados.status === 'PARCIAL'); });
+      try { return await q(sb.from('q2_registros').select('*').eq('origem', 'CQPendentes').eq('dados->>tipo', 'HEMA_REPET').in('dados->>status', ['PENDENTE', 'PARCIAL']).order('dia')); } catch (e) { console.warn('[hemaPend]', e.message || e); return []; }
+    },
     async pendentesApoio() {
       if (demo) return (banco().regs || []).filter(function (r) { return r.origem === 'CQPendentes'; });
       return q(sb.from('q2_registros').select('*').eq('origem', 'CQPendentes').order('dia'));

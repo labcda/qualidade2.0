@@ -275,3 +275,11 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 .hj-atr-l{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 0;border-top:1px solid var(--bd)}
 .hj-atr-l small{display:block;color:var(--mut);font-size:.78rem;margin-top:2px;max-width:640px}
 .hj-atr-b{display:flex;gap:8px;flex-wrap:wrap}
+
+/* hemograma: comparação dia anterior x reanálise */
+.hm-tab{margin-top:12px;overflow:auto}
+.hm-th,.hm-tr{display:grid;grid-template-columns:minmax(120px,1.2fr) 1fr 1fr minmax(110px,.9fr) minmax(80px,.6fr);gap:10px;align-items:center;min-width:560px;padding:6px 0;border-bottom:1px solid var(--bd)}
+.hm-th{font-size:.7rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
+.hm-tr input{width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;font:inherit;min-width:0}
+.hm-tr input[readonly]{background:rgba(148,163,184,.15)}
+.hm-tr small{color:var(--mut);font-size:.72rem}
