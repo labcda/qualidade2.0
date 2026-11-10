@@ -10,32 +10,33 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-10c';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-10d';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     /* no banco real: quando a biblioteca é corrigida (BIB_VER muda), o primeiro usuário com permissão de escrita que abrir o sistema aplica os textos novos sozinho; o texto anterior fica no histórico de versões */
-    if (!DB.demo && S.d.docs.length && DB.pode('escrever')) { try { if (localStorage.getItem('q2_bib_ver_real') !== BIB_VER) { localStorage.setItem('q2_bib_ver_real', BIB_VER); await semear(true); } } catch (e) { try { localStorage.removeItem('q2_bib_ver_real'); } catch (e2) { } } }
+    if (!DB.demo && S.d.docs.length && DB.pode('escrever')) { var jaFez = ''; try { jaFez = localStorage.getItem('q2_bib_ver_real'); } catch (e) { } if (jaFez !== BIB_VER) { try { try { localStorage.setItem('q2_bib_ver_real', BIB_VER); } catch (e) { } var qt = await semear(true); if (qt) setTimeout(function () { toast('Biblioteca atualizada: ' + qt + ' documento(s) com texto novo (o anterior ficou no histórico de versões).'); }, 500); } catch (e) { try { localStorage.removeItem('q2_bib_ver_real'); } catch (e2) { } setTimeout(function () { toast('Não consegui atualizar a biblioteca: ' + (e.message || e), 1); }, 500); } } }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
   async function semear(silencioso) {
     var docs = (window.Q2_DOCS || []).map(function (d) { return Object.assign({ unidade: 'Matriz', versao: '1', status: 'rascunho', elaborador: 'Diêgo Padua Silva', data_elaboracao: '2026-11-06' }, d); });
-    var jaTem = {}; S.d.docs.forEach(function (x) { jaTem[x.codigo + '|' + x.titulo + '|' + (x.unidade || 'Matriz')] = x; });
+    var jaTem = {}; S.d.docs.forEach(function (x) { var k = x.codigo + '|' + (x.unidade || 'Matriz'); if (!jaTem[k] || (jaTem[k].status === 'obsoleto' && x.status !== 'obsoleto')) jaTem[k] = x; });
     var preservados = 0, mudados = 0, novos = [];
     for (var i = 0; i < docs.length; i++) {
-      var n = docs[i], ex = jaTem[n.codigo + '|' + n.titulo + '|' + n.unidade];
+      var n = docs[i], ex = jaTem[n.codigo + '|' + n.unidade];
       if (!ex) { novos.push(n); continue; }
-      if ((ex.texto || '') === n.texto) continue;
+      if ((ex.texto || '') === n.texto && ex.titulo === n.titulo) continue;
       /* texto novo da biblioteca substitui o antigo mesmo em documento já em revisão/vigente; situação, versão e assinaturas ficam como estão e o texto anterior vai para o histórico de versões */
       try { await DB.addVersao({ doc_id: ex.id, versao: ex.versao, status: ex.status, texto: ex.texto, autor: 'Sistema', motivo: 'Texto anterior à reescrita de 10/11/2026' }); } catch (e) { }
-      novos.push(Object.assign({}, ex, { texto: n.texto })); mudados++;
+      await DB.setTextoDoc(ex.id, n.texto, n.titulo); mudados++;
     }
     await DB.saveDocs(novos);
     if (!silencioso) toast('Biblioteca atualizada: ' + novos.length + ' documento(s) novo(s) ou reescrito(s) (' + mudados + ' com texto atualizado; o texto anterior ficou no histórico de versões).');
     var resp = REQ.filter(function (r) { return !S.d.resp[r[0]]; }).map(function (r) { return { codigo: r[0], resposta: r[5], constatacao: r[9] || '', futuro: !!r[7], atualizado_por: 'Autoavaliação Unimed (06/11/2026)' }; });
     if (resp.length) await DB.saveRespostas(resp);
     await carregar(); if (!silencioso) render();
+    return mudados;
   }
   function resp(r) { var x = S.d.resp[r[0]]; return x ? { v: x.resposta, c: x.constatacao || '', f: !!x.futuro } : { v: r[5], c: r[9] || '', f: !!r[7] }; }
   function docPorCod(c) { return S.d.docs.filter(function (d) { return d.codigo === c && d.status !== 'obsoleto'; })[0]; }
