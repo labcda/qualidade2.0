@@ -225,6 +225,19 @@
       if (demo) { var b = banco(); (b.indDef || []).forEach(function (x) { if (x.codigo === codigo) x.meta = meta; }); sv(b); return; }
       return q(sb.from('q2_ind_def').update({ meta: meta }).eq('codigo', codigo));
     },
+    /* ----- ciência dos colaboradores nos documentos ----- */
+    async ciencias() {
+      if (demo) return banco().cienc || [];
+      try { return await q(sb.from('q2_ciencias').select('*').order('data')); } catch (e) { console.warn('[ciencias]', e.message || e); return []; }
+    },
+    async saveCiencias(lista) {
+      if (demo) { var b = banco(); b.cienc = b.cienc || []; lista.forEach(function (c) { var i = b.cienc.findIndex(function (x) { return x.doc_codigo === c.doc_codigo && x.versao === c.versao && x.nome === c.nome; }); if (i < 0) { c.id = uid(); b.cienc.push(c); } else b.cienc[i] = Object.assign(b.cienc[i], c); }); sv(b); return; }
+      return q(sb.from('q2_ciencias').upsert(lista, { onConflict: 'doc_codigo,versao,nome' }));
+    },
+    async delCiencia(id) {
+      if (demo) { var b = banco(); b.cienc = (b.cienc || []).filter(function (x) { return String(x.id) !== String(id); }); sv(b); return; }
+      return q(sb.from('q2_ciencias').delete().eq('id', id));
+    },
     /* ----- assinaturas cadastradas (Ajustes) ----- */
     async assinaturas() {
       if (demo) return banco().assin || [];

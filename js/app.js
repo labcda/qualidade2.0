@@ -1,7 +1,7 @@
 /* Qualidade 2.0 · CDA — interface */
 (function () {
   var $ = function (id) { return document.getElementById(id); }, h = MD.esc, REQ = window.Q2_REQ, DOM = window.Q2_DOMINIOS, GRP = window.Q2_GRUPOS;
-  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false, hema: [], hemaPend: [] }, docId: null, busca: '', tipo: '', situ: '' };
+  var S = { pg: 'inicio', dom: 'D1', filtro: 'todos', aberto: {}, d: { docs: [], resp: {}, evid: [], legais: [], equip: [], temps: [], regs: [], tol: {}, fia: [], fiaFx: null, assin: [], indDef: [], indVal: [], indErro: '', nc: [], ncErro: false, hema: [], hemaPend: [], cienc: [] }, docId: null, busca: '', tipo: '', situ: '' };
   var RLAB = { A: 'Atende', P: 'Parcial', N: 'Não atende', NA: 'Não se aplica' }, RCOR = { A: '#16a34a', P: '#d97706', N: '#dc2626', NA: '#64748b', F: '#7c6cf0' };
   var LEG_NOME = {}; window.Q2_LEGAIS.forEach(function (l) { LEG_NOME[l[0]] = l[1]; });
   function toast(t, e) { var x = document.createElement('div'); x.className = 'toast' + (e ? ' e' : ''); x.textContent = t; document.body.appendChild(x); setTimeout(function () { x.remove(); }, 3600); }
@@ -12,8 +12,8 @@
   /* ---------- dados e cálculos ---------- */
   var BIB_VER = '2026-11-09b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
-    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes()]);
-    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || [];
+    var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
+    S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
   }
@@ -62,6 +62,27 @@
       '<div class="eu"><div class="av">' + h((u.nome || '?').charAt(0).toUpperCase()) + '</div><div><b>' + h(u.nome) + '</b><small>' + h(({ admin: 'Administrador', elabora: 'Elabora', revisa: 'Revisa', aprova: 'Aprova', consulta: 'Consulta' })[u.papel]) + (DB.demo ? ' · demonstração' : '') + '</small></div><button data-sair>Sair</button></div>';
   }
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
+  /* ---------- ciência (leitura e treinamento) dos colaboradores nos documentos ---------- */
+  function colabs() { return S.d.assin.filter(function (x) { return x.ativo !== false && x.nome; }).sort(function (x, y) { return x.nome < y.nome ? -1 : 1; }); }
+  function cienciasDe(d) { return S.d.cienc.filter(function (c) { return c.doc_codigo === d.codigo && String(c.versao) === String(d.versao); }); }
+  function cienciaWrap(d, corpo) {
+    var l = cienciasDe(d); if (!l.length) return corpo;
+    return corpo + '<h2>Registro de ciência da equipe · versão ' + h(d.versao) + '</h2><p>Os colaboradores abaixo leram o documento e foram treinados na versão indicada.</p><table class="cien-tab"><thead><tr><th>Colaborador</th><th>Cargo</th><th>Data</th><th>Assinatura</th></tr></thead><tbody>' + l.slice().sort(function (x, y) { return x.nome < y.nome ? -1 : 1; }).map(function (c) { var s = MD.assinaturaDe(c.nome); return '<tr><td><b>' + h(c.nome) + '</b></td><td>' + h(c.cargo || (s && s.cargo) || '') + '</td><td>' + MD.fmtData(c.data) + '</td><td>' + (s ? '<img class="sig-mini" src="' + h(s.imagem) + '" alt="Assinatura de ' + h(c.nome) + '">' : '—') + '</td></tr>'; }).join('') + '</tbody></table>';
+  }
+  function painelCiencia(d) {
+    var todos = colabs(), feitas = cienciasDe(d), pode = DB.pode('escrever'), fez = {}; feitas.forEach(function (c) { fez[MD.chave(c.nome)] = c; });
+    var pend = todos.filter(function (c) { return !fez[MD.chave(c.nome)]; });
+    var o = '<div class="vidro pad nao-imprime cien-painel"><h3 style="margin-top:0">Ciência da equipe · versão ' + h(d.versao) + '</h3><p style="color:var(--mut);font-size:.84rem;margin:0 0 10px"><b>' + feitas.length + '</b> de <b>' + todos.length + '</b> colaboradores cadastrados já tomaram ciência. A assinatura de cada um vem do cadastro (Ajustes › Assinaturas) e entra sozinha no documento impresso.</p>';
+    if (!todos.length) return o + '<div class="vazio">Nenhum colaborador com assinatura cadastrada. Cadastre em Ajustes › Assinaturas.</div></div>';
+    o += '<div class="cien-lista">' + todos.map(function (c) { var f = fez[MD.chave(c.nome)]; return '<label class="cien-l' + (f ? ' ok' : '') + '">' + (f ? '<span class="cien-v">✓</span>' : (pode ? '<input type="checkbox" data-cienck value="' + h(c.nome) + '">' : '<span class="cien-v">·</span>')) + '<span><b>' + h(c.nome) + '</b><small>' + h(c.cargo || '') + (f ? ' · ciente em ' + MD.fmtData(f.data) : ' · pendente') + '</small></span>' + (f && pode ? '<button type="button" class="btn s v" data-ciendel="' + h(f.id) + '" title="Remover a ciência">×</button>' : '') + '</label>'; }).join('') + '</div>';
+    if (pode && pend.length) o += '<div class="bt" style="margin-top:12px;gap:10px;flex-wrap:wrap;align-items:end"><label class="cmp" style="max-width:190px"><span>Data da leitura/treinamento</span><input type="date" id="cien-data" value="' + hoje() + '" max="' + hoje() + '"></label><button class="btn s" data-cientodos>Marcar todos os pendentes</button><button class="btn" data-cienreg>Registrar ciência dos marcados</button></div>';
+    return o + '</div>';
+  }
+  async function registrarCiencia(d, nomes) {
+    if (!nomes.length) throw new Error('Marque ao menos um colaborador.');
+    var data = ($('cien-data') || {}).value || hoje(), lst = nomes.map(function (n) { var s = MD.assinaturaDe(n); return { doc_codigo: d.codigo, versao: String(d.versao), nome: n, cargo: (s && s.cargo) || '', data: data, registrado_por: DB.user.nome }; });
+    await DB.saveCiencias(lst); DB.log('ciencia', d.codigo + ' v' + d.versao + ' · ' + nomes.length); await carregar(); render(); toast('Ciência registrada para ' + nomes.length + ' colaborador(es).');
+  }
   /* assinatura de quem emite o relatório e de quem aparece no registro, tirada do cadastro de assinaturas */
   function emissao() { return '<div class="assin">' + MD.bloco(DB.user.nome, 'Relatório emitido por', hoje(), true) + '</div>'; }
   function textosDe(v, o) { o = o || []; if (v === null || v === undefined) return o; if (typeof v === 'string') { if (/^\s*[\[{]/.test(v)) { try { return textosDe(JSON.parse(v), o); } catch (e) { } } o.push(v); } else if (Array.isArray(v)) v.forEach(function (x) { textosDe(x, o); }); else if (typeof v === 'object') Object.keys(v).forEach(function (k) { if (k.charAt(0) !== '_') textosDe(v[k], o); }); return o; }
@@ -160,7 +181,7 @@
     var pode = DB.pode('escrever'), reqs = REQ.filter(function (r) { return (r[6] || []).indexOf(d.codigo) >= 0; });
     var o = '<button class="voltar" data-voltar>← Voltar aos documentos</button><div class="barra-doc topo"><h1>' + h(d.codigo) + '<small>' + h(d.titulo) + '</small></h1><span class="selo ' + d.status + '">' + MD.ST[d.status] + '</span>' +
       '<button class="btn" data-imprimir>🖨 Imprimir</button>' + (pode ? '<button class="btn s" data-editar>✎ Editar</button>' : '') + (pode && d.status === 'rascunho' ? '<button class="btn s" data-sit="em_revisao">Enviar para revisão</button>' : '') + (DB.pode('aprovar') && d.status !== 'vigente' ? '<button class="btn" style="background:#16a34a" data-sit="vigente">✔ Aprovar e publicar</button>' : '') + (pode && d.status === 'vigente' ? '<button class="btn s" data-novaver>Nova versão</button>' : '') + '<button class="btn s" data-hist>Histórico</button></div>';
-    o += '<div class="fundo-folha">' + MD.folha(d, d.texto && d.texto.length > 10 ? MD.md(d.texto) : '<div class="vazio nao-imprime">Este documento ainda não tem texto no sistema. ' + (pode ? 'Clique em Editar para escrever ou colar o conteúdo.' : '') + '</div>') + '</div>';
+    o += '<div class="fundo-folha">' + MD.folha(d, cienciaWrap(d, d.texto && d.texto.length > 10 ? MD.md(d.texto) : '<div class="vazio nao-imprime">Este documento ainda não tem texto no sistema. ' + (pode ? 'Clique em Editar para escrever ou colar o conteúdo.' : '') + '</div>')) + '</div>' + painelCiencia(d);
     if (reqs.length) o += '<div class="vidro pad nao-imprime" style="margin-top:18px"><b>Este documento comprova os requisitos:</b><div class="chips" style="margin:10px 0 0">' + reqs.map(function (r) { return '<button class="chip" data-req="' + r[0] + '">' + r[0] + '</button>'; }).join('') + '</div></div>';
     return o;
   }
@@ -651,7 +672,7 @@
     return o;
   }
   function celTab(c, v) {
-    var ph = ' data-fvt-k="' + h(c.label) + '"';
+    var ph = ' data-fvt-k="' + h(c.label) + '"' + (c.tipo !== 'select' && c.tipo !== 'data' && /nome|colaborador|participante|respons[aá]vel|auditor|avaliador|quem/i.test(c.label) ? ' list="dl-assin"' : '');
     if (c.tipo === 'select') return '<select' + ph + '><option value="">—</option>' + (c.opcoes || []).map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + h(x) + '</option>'; }).join('') + '</select>';
     return '<input type="' + (c.tipo === 'data' ? 'date' : 'text') + '"' + ph + ' value="' + h(v || '') + '">';
   }
@@ -665,7 +686,7 @@
     var lb = h(c.label) + (c.obrig ? ' <i class="obr">*</i>' : '') + (c.min != null || c.max != null ? ' <i>(' + (c.min != null ? c.min : '') + ' a ' + (c.max != null ? c.max : '') + ')</i>' : '');
     var op = (c.opcoes || []).map(function (x) { return '<option>' + h(x) + '</option>'; }).join('');
     if (c.tipo === 'check') return '<label class="hj-ck"><input type="checkbox" data-fv="' + c.id + '"> ' + h(c.label) + '</label>';
-    if (c.tipo === 'textarea') return '<label class="cmp fv-w"><span>' + lb + '</span><textarea data-fv="' + c.id + '" rows="3"></textarea></label>';
+    if (c.tipo === 'textarea') return '<label class="cmp fv-w"><span>' + lb + '</span>' + (/participantes|presentes|envolvidos|ci[eê]ncia|colaboradores|treinados/i.test(c.label) && colabs().length ? '<div class="fv-pick"><small>Escolha os colaboradores (a assinatura cadastrada de cada um sai no registro):</small><div class="fv-multi">' + colabs().map(function (x) { return '<label class="hj-ck"><input type="checkbox" data-fvpick="' + c.id + '" value="' + h(x.nome) + '"> ' + h(x.nome) + '</label>'; }).join('') + '</div></div>' : '') + '<textarea data-fv="' + c.id + '" rows="3"></textarea></label>';
     if (c.tipo === 'select') return '<label class="cmp"><span>' + lb + '</span><select data-fv="' + c.id + '"><option value="">—</option>' + op + '</select></label>';
     if (c.tipo === 'multi') return '<div class="cmp fv-w"><span>' + lb + '</span><div class="fv-multi">' + (c.opcoes || []).map(function (x) { return '<label class="hj-ck"><input type="checkbox" data-fvm="' + c.id + '" value="' + h(x) + '"> ' + h(x) + '</label>'; }).join('') + '</div></div>';
     if (c.tipo === 'grade') return '<div class="cmp fv-w"><span>' + lb + '</span><div style="overflow:auto"><table class="tbl"><thead><tr><th></th>' + c.colunas.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr></thead><tbody>' + c.linhas.map(function (l) { return '<tr><td><b>' + h(l) + '</b></td>' + c.colunas.map(function (k) { return '<td><input data-fvg="' + c.id + '" data-l="' + h(l) + '" data-k="' + h(k) + '" style="width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;font:inherit"></td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></div>';
@@ -1116,6 +1137,9 @@
     if ((a = t.closest('[data-fvdel]'))) { var trr = a.closest('tr'); if (trr) trr.remove(); return; }
     if (t.closest('[data-frmvolta]')) { S.frm = { cod: '', q: '' }; return render(); }
     if (t.closest('[data-frmsalvar]')) { try { await salvarForm(); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-cientodos]')) { [].slice.call(document.querySelectorAll('[data-cienck]')).forEach(function (c) { c.checked = true; }); return; }
+    if (t.closest('[data-cienreg]')) { try { var dd = S.d.docs.filter(function (x) { return x.id === S.docId; })[0]; await registrarCiencia(dd, [].slice.call(document.querySelectorAll('[data-cienck]:checked')).map(function (c) { return c.value; })); } catch (er) { toast(er.message, 1); } return; }
+    if ((a = t.closest('[data-ciendel]'))) { if (confirm('Remover esta ciência?')) { try { await DB.delCiencia(a.dataset.ciendel); await carregar(); render(); } catch (er) { toast(er.message, 1); } } return; }
     if (t.closest('[data-ncnovo]')) { S.nc.novo = true; S.nc.tipo = 'nc'; return render(); }
     if ((a = t.closest('[data-ncabrir]'))) { S.nc.id = a.dataset.ncabrir; S.nc.rel = false; return render(); }
     if (t.closest('[data-ncvolta]')) { S.nc.novo = false; S.nc.id = null; S.nc.rel = false; return render(); }
@@ -1183,6 +1207,7 @@
   document.addEventListener('input', function (e) {
     if (e.target.dataset && e.target.dataset.api !== undefined && e.target.dataset.apid) varApoio(e.target);
     if (e.target.id === 'nc-ftipo') { S.nc.ft = e.target.value; return render(); }
+    if (e.target.dataset && e.target.dataset.fvpick) { var tid = e.target.dataset.fvpick, ta = document.querySelector('[data-fv="' + tid + '"]'), todosN = [].slice.call(document.querySelectorAll('[data-fvpick="' + tid + '"]')), tm = todosN.map(function (x) { return x.value; }); if (ta) { var livres = ta.value.split('\n').filter(function (l) { return l.trim() && tm.indexOf(l.trim()) < 0; }); ta.value = livres.concat(todosN.filter(function (x) { return x.checked; }).map(function (x) { return x.value; })).join('\n'); } return; }
     if (e.target.dataset && e.target.dataset.hmc !== undefined) { hemaAoVivo(e.target); return; }
     if (e.target.id === 'ind-ano') { S.ind.ano = Number(e.target.value); return render(); }
     if (e.target.id === 'fm-q') { S.frm = S.frm || { cod: '', q: '' }; S.frm.q = e.target.value; var p3 = e.target.selectionStart; render(); var n3 = $('fm-q'); if (n3) { n3.focus(); n3.setSelectionRange(p3, p3); } }

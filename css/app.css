@@ -283,3 +283,14 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 .hm-tr input{width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;font:inherit;min-width:0}
 .hm-tr input[readonly]{background:rgba(148,163,184,.15)}
 .hm-tr small{color:var(--mut);font-size:.72rem}
+
+/* ciência da equipe */
+.cien-painel{margin-top:16px}
+.cien-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.cien-l{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--bd);border-radius:12px;cursor:pointer}
+.cien-l.ok{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.35);cursor:default}
+.cien-l small{display:block;color:var(--mut);font-size:.74rem}
+.cien-l .btn{margin-left:auto;padding:2px 9px}
+.cien-v{color:#16a34a;font-weight:800;width:16px;text-align:center}
+.cien-tab td,.cien-tab th{vertical-align:middle}
+.fv-pick{margin:4px 0 8px}.fv-pick small{color:var(--mut)}
