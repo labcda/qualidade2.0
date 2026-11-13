@@ -1006,6 +1006,37 @@
   function jsonSeg(s, pad) { try { return typeof s === 'string' ? JSON.parse(s || '') : (s || pad); } catch (e) { return pad; } }
   function numBR(v) { var s = String(v === null || v === undefined ? '' : v).trim(); if (!s) return NaN; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s); }
   function analitosUnicos(linhas) { var u = [], vis = {}; linhas.forEach(function (l) { if (!vis[l.analito]) { vis[l.analito] = 1; u.push(l.analito); } }); return u; }
+  /* registrar a amostra que foi enviada ao laboratório de apoio (hematologia ou bioquímica); o retorno é digitado depois, na lista abaixo */
+  var AN_BIOQ = ['Glicose', 'Colesterol', 'Triglicerídeos', 'Ácido úrico', 'CPK', 'Creatinina', 'Ureia', 'TGO', 'TGP', 'Bilirrubina total', 'Bilirrubina direta', 'Gama GT'];
+  var APOIOS = ['Alvaro Apoio', 'DB Diagnósticos do Brasil', 'Hermes Pardini'];
+  var APOIO_TIPOS = { HEMA_APOIO: { nome: 'Hematologia', equips: ['Sysmex KX', 'Zybio Z3'], an: AN_HEMO, rot: 'Hema apoio' }, BIOQ_APOIO: { nome: 'Bioquímica', equips: ['Biosystems A15'], an: AN_BIOQ, rot: 'Bioq apoio' } };
+  function modalEnviarApoio() {
+    var opAp = function (vazio) { return (vazio ? '<option value="">—</option>' : '') + APOIOS.map(function (x) { return '<option>' + h(x) + '</option>'; }).join(''); };
+    var o = modal('<h3>Amostra enviada ao laboratório de apoio</h3><p style="color:var(--mut);font-size:.84rem;margin:0 0 10px">Registre aqui os valores medidos no CDA. Quando o apoio devolver o resultado, digite-o em <b>Aguardando retorno do apoio</b>: o sistema calcula a variação e confere a tolerância.</p>' +
+      '<div class="hj-campos"><label class="cmp"><span>Controle <i class="obr">*</i></span><select id="ap-tipo"><option value="HEMA_APOIO">Hematologia</option><option value="BIOQ_APOIO">Bioquímica</option></select></label>' +
+      '<label class="cmp"><span>Data <i class="obr">*</i></span><input type="date" id="ap-data" value="' + hoje() + '" max="' + hoje() + '"></label>' +
+      '<label class="cmp"><span>Identificação da amostra <i class="obr">*</i></span><input id="ap-am"></label>' +
+      '<label class="cmp"><span>Laboratório de apoio <i class="obr">*</i></span><select id="ap-l1">' + opAp() + '</select></label>' +
+      '<label class="cmp"><span>Segundo laboratório (opcional)</span><select id="ap-l2">' + opAp(true) + '</select></label>' +
+      '<label class="cmp"><span>Equipamento do CDA</span><select id="ap-eq"></select></label></div>' +
+      '<div id="ap-an" class="hj-campos" style="margin-top:10px"></div><label class="cmp fv-w"><span>Observação</span><input id="ap-obs"></label>' +
+      '<div class="bt" style="margin-top:12px"><button class="btn" data-apsalvar>Registrar envio</button><button class="btn s" data-x>Cancelar</button></div>', function (m) {
+      var tp = m.querySelector('#ap-tipo');
+      function pinta() { var t = APOIO_TIPOS[tp.value]; m.querySelector('#ap-eq').innerHTML = t.equips.map(function (x) { return '<option>' + h(x) + '</option>'; }).join(''); m.querySelector('#ap-an').innerHTML = t.an.map(function (n, i) { return '<label class="cmp"><span>' + h(n) + '</span><input inputmode="decimal" data-apv="' + i + '"></label>'; }).join(''); }
+      tp.onchange = pinta; pinta(); m.querySelector('[data-x]').onclick = m.fechar;
+      m.querySelector('[data-apsalvar]').onclick = async function () { try { await salvarEnvioApoio(m); m.fechar(); } catch (er) { toast(er.message, 1); } };
+    });
+  }
+  async function salvarEnvioApoio(m) {
+    var tipo = m.querySelector('#ap-tipo').value, T = APOIO_TIPOS[tipo], data = m.querySelector('#ap-data').value, am = m.querySelector('#ap-am').value.trim(), eq = m.querySelector('#ap-eq').value;
+    var labs = [m.querySelector('#ap-l1').value, m.querySelector('#ap-l2').value].filter(function (x) { return x; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+    if (!data || !am) throw new Error('Informe a data e a identificação da amostra.'); if (!labs.length) throw new Error('Informe o laboratório de apoio.');
+    var linhas = []; T.an.forEach(function (n, i) { var v = m.querySelector('[data-apv="' + i + '"]').value.trim(); if (!v) return; var x = numBR(v); if (isNaN(x)) throw new Error('Valor inválido em ' + n + '.'); linhas.push({ analito: n, equipamento: eq, valor_medido: x }); });
+    if (!linhas.length) throw new Error('Digite ao menos um valor medido no CDA.');
+    var agora = new Date().toISOString();
+    await DB.addRegistros([{ origem: 'CQPendentes', form: '', titulo: 'Aguardando retorno do apoio · ' + T.rot, unidade: '', periodo: '', dia: data, item: am, usuario: DB.user.nome, criado_em: agora, dados: { id: 'QP' + Date.now().toString(36).toUpperCase(), tipo: tipo, data: data, amostra: am, usuario: DB.user.nome, registrado_em: agora, labs_json: JSON.stringify(labs), linhas_json: JSON.stringify(linhas), feito_json: '[]', status: 'PENDENTE', observacao: m.querySelector('#ap-obs').value.trim(), atualizado_em: agora } }]);
+    DB.log('apoio', tipo + ' ' + data + ' amostra ' + am + ' -> ' + labs.join(' e ')); await carregar(); render(); toast('Envio ao apoio registrado. Digite o retorno quando o laboratório devolver.');
+  }
   async function carregaApoio() {
     var box;
     try {
@@ -1072,7 +1103,7 @@
     var ph = pendHoje(S.rdData || hoje()) + atrasos().reduce(function (s, x) { return s + x.itens.length; }, 0) + tarefasAtrasadas().length;
     o += '<div class="anim rd-tabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">' + aba('hoje', '✅', 'O que preencher hoje', 'Limpeza, temperatura e umidade, geladeiras', ph ? '<em class="rd-n">' + ph + '</em>' : '') + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') + '</div>';
     if (tab === 'hoje') o += pgHoje();
-    else if (tab === 'apoio') o += '<div id="apoio-box"><div class="vazio">Carregando…</div></div>';
+    else if (tab === 'apoio') o += '<div class="bt" style="margin:0 0 12px"><button class="btn" data-apnovo>＋ Registrar amostra enviada ao apoio</button></div><div id="apoio-box"><div class="vazio">Carregando…</div></div>';
     else { o += '<div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>'; setTimeout(carregaTemp, 30); }
     setTimeout(carregaApoio, 20); return o;
   }
@@ -1238,6 +1269,7 @@
     if ((a = t.closest('[data-tfform]'))) { S.frm = { cod: a.dataset.tfform, q: '' }; return irPara('frm'); }
     if ((a = t.closest('[data-rdir]'))) { S.rdData = a.dataset.rdir; return render(); }
     if (t.closest('[data-hmcomps]')) { try { await salvarHemaComp(S.rdData || hoje()); } catch (er) { toast(er.message, 1); } return; }
+    if (t.closest('[data-apnovo]')) return modalEnviarApoio();
     if (t.closest('[data-hmsalvar]')) { try { await salvarHema(); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-rdsemexp]'))) { var dsx = a.dataset.rdsemexp, mot = prompt('Por que não houve expediente em ' + MD.fmtData(dsx) + '? (feriado, recesso, etc. — fica registrado)'); if (!mot || !mot.trim()) return; try { await DB.addRegistros([{ origem: 'SemExpediente', form: '', titulo: 'Dia sem expediente', unidade: '', periodo: dsx.slice(0, 7), dia: dsx, item: mot.trim(), usuario: DB.user.nome, criado_em: new Date().toISOString(), dados: { motivo: mot.trim() } }]); DB.log('sem-expediente', dsx + ' ' + mot.trim()); await carregar(); render(); toast('Dia marcado como sem expediente.'); } catch (er) { toast(er.message, 1); } return; }
     if ((a = t.closest('[data-rdtab]'))) { S.rdTab = a.dataset.rdtab; return render(); }
