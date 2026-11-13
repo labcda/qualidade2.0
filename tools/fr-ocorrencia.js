@@ -39,4 +39,15 @@ const FR038 = [
   '', '## 3. Eventos graves', '', 'Never event, dano grave ou óbito: o sistema exibe um aviso. A notificação ao NOTIVISA é feita em até 72 horas e abre-se a investigação detalhada no FR 045 (Relatório de Investigação de Evento Adverso Grave ou Óbito), concluída em até 60 dias.',
   '', '## 4. Situação', '', FLUXO
 ].join(NL);
-module.exports = { 'FR 006': FR006, 'FR 038': FR038 };
+const FR039 = [
+  'Formulário preenchido diretamente no sistema: **Qualidade 2.0 › Rotina do dia › Preencher formulário** (busque por ASO, FR ou VDRL). Controle **quinzenal** dos testes de aglutinação e floculação (PQ 006), com controle negativo e positivo de cada teste.',
+  '', '| Campo | Preenchimento |', '|---|---|',
+  '| Data | Data do controle |',
+  '| Lote / validade dos reagentes | Texto |',
+  '| Fator reumatoide (FR) | Controle negativo: não reagente (esperado) · Controle positivo: reagente (esperado) |',
+  '| ASLO / ASO (antiestreptolisina O) | Controle negativo: não reagente (esperado) · Controle positivo: reagente (esperado) |',
+  '| VDRL | Controle negativo: não reagente (esperado) · Controle positivo: reagente (esperado) |',
+  '| Responsável pela execução | Colaborador, com a assinatura cadastrada |',
+  '| Observações / ação | Se algum controle não reagir como esperado, o teste é inválido: repetir e descrever a ação |'
+].join(NL);
+module.exports = { 'FR 006': FR006, 'FR 038': FR038, 'FR 039': FR039 };
