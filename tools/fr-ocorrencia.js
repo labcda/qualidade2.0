@@ -49,4 +49,15 @@ const FR039 = [
   '| Responsável pela execução | Colaborador, com a assinatura cadastrada |',
   '| Observações / ação | Se algum controle não reagir como esperado, o teste é inválido: repetir e descrever a ação |'
 ].join(NL);
-module.exports = { 'FR 006': FR006, 'FR 038': FR038, 'FR 039': FR039 };
+const FR042 = [
+  'Formulário preenchido diretamente no sistema: **Qualidade 2.0 › Rotina do dia › Preencher formulário › FR 042** (ou o botão "Registrar amostra enviada ao apoio" em Rotina do dia › Hoje › Aguardando retorno do apoio). A mesma tela serve para a Bioquímica.',
+  '', '## 1. Envio (no dia da coleta)', '',
+  '| Campo | Preenchimento |', '|---|---|',
+  '| Data e identificação da amostra | Código de barras ou identificação da amostra |',
+  '| Laboratório(s) de apoio | Um ou dois (Alvaro Apoio, DB Diagnósticos do Brasil, Hermes Pardini) |',
+  '| Equipamento do CDA | Sysmex KX ou Zybio Z3 (hematologia); Biosystems A15 (bioquímica) |',
+  '| Valores do CDA | Hemácias, hemoglobina, hematócrito, VCM, HCM, CHCM, RDW, leucócitos totais e plaquetas (hematologia) |',
+  '', '## 2. Retorno do apoio', '',
+  'Quando o apoio devolve, o resultado é digitado em **Aguardando retorno do apoio**. O sistema mostra o limite aceitável de cada exame (tabela de tolerância por analito), calcula a variação entre o CDA e o apoio e indica se ficou dentro ou fora do limite. Resultado fora do limite exige ação corretiva registrada na própria tela.'
+].join(NL);
+module.exports = { 'FR 006': FR006, 'FR 038': FR038, 'FR 039': FR039, 'FR 042': FR042 };

@@ -10,7 +10,7 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-13b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-13c';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
@@ -739,11 +739,11 @@
   /* ---------- Preencher formulário: todos os FR da Qualidade anterior ---------- */
   function defForm(cod) { return window.Q2_FORMS.filter(function (f) { return f.c === cod; })[0]; }
   function camposDe(f) { return f.modo === 'mensal' ? (f.cols || []) : (f.campos || []); }
-  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }, { c: 'FR 001', t: 'Controle de Temperatura de Estocagem de Reagentes e Amostras', cat: 'Temperatura e ambiente', modo: 'temp' }, { c: 'APOIO BIOQ', t: 'Bioquímica · amostra enviada ao laboratório de apoio', cat: 'Controle interno e laboratório de apoio', modo: 'apoio' }, { c: 'APOIO HEMA', t: 'Hematologia · amostra enviada ao laboratório de apoio', cat: 'Controle interno e laboratório de apoio', modo: 'apoio' }]); }
+  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }, { c: 'FR 001', t: 'Controle de Temperatura de Estocagem de Reagentes e Amostras', cat: 'Temperatura e ambiente', modo: 'temp' }, { c: 'APOIO BIOQ', t: 'Controle Interno de Bioquímica - Confrontação com Laboratórios de Apoio', cat: 'Controle interno e laboratório de apoio', modo: 'apoio' }]); }
   function pgForms() {
     var R = S.frm || (S.frm = { cod: '', q: '' });
     if (R.cod === 'FR 006' || R.cod === 'FR 038') { var tp0 = R.cod === 'FR 006' ? 'nc' : 'evento'; R.cod = ''; S.nc = { id: null, novo: true, tipo: tp0, f: 'abertas', ft: '' }; setTimeout(function () { irPara('nc'); }, 0); return '<div class="vazio">Abrindo o registro de ocorrências…</div>'; }
-    if (R.cod === 'APOIO BIOQ' || R.cod === 'APOIO HEMA') { var tpA = R.cod === 'APOIO BIOQ' ? 'BIOQ_APOIO' : 'HEMA_APOIO'; R.cod = ''; S.rdTab = 'apoio'; setTimeout(function () { irPara('registros'); setTimeout(function () { modalEnviarApoio(tpA); }, 250); }, 0); return '<div class="vazio">Abrindo o registro de amostra enviada ao apoio…</div>'; }
+    if (R.cod === 'APOIO BIOQ' || R.cod === 'FR 042') { var tpA = R.cod === 'APOIO BIOQ' ? 'BIOQ_APOIO' : 'HEMA_APOIO'; R.cod = ''; S.rdTab = 'apoio'; setTimeout(function () { irPara('registros'); setTimeout(function () { modalEnviarApoio(tpA); }, 250); }, 0); return '<div class="vazio">Abrindo o registro de amostra enviada ao apoio…</div>'; }
     if (R.cod === 'FR 001') { R.cod = ''; S.rdTab = 'temp'; setTimeout(function () { irPara('registros'); }, 0); return '<div class="vazio">Abrindo o registro de temperaturas…</div>'; }
     if (R.cod === 'FIA') { R.cod = ''; S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false }; S.cq.fia = true; return pgFia(); }
     if (R.cod) return pgFormPreencher();
