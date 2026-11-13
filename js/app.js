@@ -137,7 +137,7 @@
   function emissao() { return '<div class="assin">' + MD.bloco(DB.user.nome, 'Relatório emitido por', hoje(), true) + '</div>'; }
   function textosDe(v, o) { o = o || []; if (v === null || v === undefined) return o; if (typeof v === 'string') { if (/^\s*[\[{]/.test(v)) { try { return textosDe(JSON.parse(v), o); } catch (e) { } } o.push(v); } else if (Array.isArray(v)) v.forEach(function (x) { textosDe(x, o); }); else if (typeof v === 'object') Object.keys(v).forEach(function (k) { if (k.charAt(0) !== '_') textosDe(v[k], o); }); return o; }
   function signatariosDe(dados, ja) {
-    var tx = textosDe(dados).map(MD.chave).join(' | '), eu = MD.chave(ja || ''), o = [];
+    var tx = textosDe(dados).map(MD.chave).join(' | '), meu = MD.assinaturaDe(ja || ''), eu = meu ? MD.chave(meu.nome) : MD.chave(ja || ''), o = [];
     S.d.assin.forEach(function (x) { if (x.ativo === false || !x.imagem) return; var k = MD.chave(x.nome); if (k && k !== eu && tx.indexOf(k) >= 0) o.push(x.nome); });
     return o;
   }
@@ -260,14 +260,15 @@
     var completar = d.status === 'vigente' && DB.pode('aprovar') && (!d.aprovador || !d.data_vigencia || !d.revisor || !d.data_revisao);
     return '<div class="hj-av nao-imprime" style="background:#fef3c7;color:#92400e;margin-bottom:10px"><b>Assinaturas incompletas neste documento:</b><ul style="margin:6px 0 0 18px">' + p.map(function (x) { return '<li>' + h(x) + '</li>'; }).join('') + '</ul>' + (completar ? '<div style="margin-top:8px"><button class="btn s" data-sit="vigente">Completar aprovação em meu nome</button></div>' : '') + '</div>';
   }
+  function meuNome() { var a = MD.assinaturaDe(DB.user.nome); return a ? a.nome : DB.user.nome; }
   async function mudarSit(d, st) {
     if (st === 'vigente' && !DB.pode('aprovar')) return toast('Somente quem tem perfil de aprovação (Responsável Técnico ou Diretoria) libera um documento como vigente.', 1);
-    var n = { id: d.id, status: st }; if (st === 'em_revisao') { n.data_revisao = hoje(); n.revisor = DB.user.nome; }
-    if (st === 'vigente') { n.aprovador = DB.user.nome; n.data_vigencia = hoje(); if (!d.revisor || !d.data_revisao) { n.revisor = d.revisor || DB.user.nome; n.data_revisao = d.data_revisao || hoje(); } if (!d.elaborador || !d.data_elaboracao) { n.elaborador = d.elaborador || DB.user.nome; n.data_elaboracao = d.data_elaboracao || hoje(); } var p = new Date(); p.setFullYear(p.getFullYear() + 1); n.proxima_revisao = p.toISOString().slice(0, 10); }
+    var n = { id: d.id, status: st }; if (st === 'em_revisao') { n.data_revisao = hoje(); n.revisor = meuNome(); }
+    if (st === 'vigente') { n.aprovador = meuNome(); n.data_vigencia = hoje(); if (!d.revisor || !d.data_revisao) { n.revisor = d.revisor || meuNome(); n.data_revisao = d.data_revisao || hoje(); } if (!d.elaborador || !d.data_elaboracao) { n.elaborador = d.elaborador || meuNome(); n.data_elaboracao = d.data_elaboracao || hoje(); } var p = new Date(); p.setFullYear(p.getFullYear() + 1); n.proxima_revisao = p.toISOString().slice(0, 10); }
     try { await DB.addVersao({ doc_id: d.id, versao: d.versao, status: st, texto: d.texto, autor: DB.user.nome, motivo: 'Situação: ' + MD.ST[st] }); await DB.saveDoc(Object.assign({}, d, n)); await carregar(); render(); toast('Situação atualizada: ' + MD.ST[st]); } catch (e) { toast(e.message, 1); }
   }
   async function novaVersao(d) {
-    try { var nv = String((parseFloat(d.versao) || 1) + 1); await DB.addVersao({ doc_id: d.id, versao: d.versao, status: d.status, texto: d.texto, autor: DB.user.nome, motivo: 'Arquivada ao abrir versão ' + nv }); await DB.saveDoc(Object.assign({}, d, { versao: nv, status: 'rascunho', elaborador: DB.user.nome, data_elaboracao: hoje(), revisor: '', data_revisao: null, aprovador: '', data_vigencia: null })); await carregar(); render(); toast('Versão ' + nv + ' aberta como rascunho.'); } catch (e) { toast(e.message, 1); }
+    try { var nv = String((parseFloat(d.versao) || 1) + 1); await DB.addVersao({ doc_id: d.id, versao: d.versao, status: d.status, texto: d.texto, autor: DB.user.nome, motivo: 'Arquivada ao abrir versão ' + nv }); await DB.saveDoc(Object.assign({}, d, { versao: nv, status: 'rascunho', elaborador: meuNome(), data_elaboracao: hoje(), revisor: '', data_revisao: null, aprovador: '', data_vigencia: null })); await carregar(); render(); toast('Versão ' + nv + ' aberta como rascunho.'); } catch (e) { toast(e.message, 1); }
   }
   async function historico(d) {
     var l = await DB.versoes(d.id);

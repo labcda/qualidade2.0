@@ -31,8 +31,15 @@
   var ASSIN = {};
   function chave(n) { return String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   function setAssin(l) { ASSIN = {}; (l || []).forEach(function (a) { if (a.ativo !== false && a.imagem) ASSIN[chave(a.nome)] = a; }); }
+  /* acha a assinatura cadastrada de uma pessoa: nome igual ou, se for só parte do nome (ex.: login "DIEGO" para "DIEGO PADUA SILVA"), a única pessoa cadastrada que tenha todas essas palavras */
+  function achar(nome) {
+    var k = chave(nome); if (k.length < 3) return null; if (ASSIN[k]) return ASSIN[k];
+    var t = k.split(' ').filter(Boolean), c = [];
+    Object.keys(ASSIN).forEach(function (n) { var p = n.split(' '); if (t.every(function (w) { return p.indexOf(w) >= 0; })) c.push(ASSIN[n]); });
+    return c.length === 1 ? c[0] : null;
+  }
   function bloco(nome, rot, data, assinou) {
-    var a = assinou ? ASSIN[chave(nome)] : null;
+    var a = assinou ? achar(nome) : null; if (a) nome = a.nome;
     return '<div>' + (a ? '<img class="sig" src="' + esc(a.imagem) + '" alt="Assinatura de ' + esc(nome) + '">' : '<span class="ln"></span>') + '<b>' + esc(nome || '—') + '</b><small>' + (a && a.cargo ? esc(a.cargo) + (a.registro ? ' · ' + esc(a.registro) : '') + ' · ' : '') + rot + (data ? ' · ' + fmtData(data) : '') + (a ? ' · assinado eletronicamente' : '') + '</small></div>';
   }
   function folha(d, corpo, opt) {
@@ -46,5 +53,5 @@
       '<table class="flow"><thead><tr><td><div class="esp-t"></div></td></tr></thead><tbody><tr><td class="miolo"><h1 class="tit">' + esc(d.titulo || '') + '</h1>' + corpo + ass + '</td></tr></tbody><tfoot><tr><td><div class="esp-b"></div></td></tr></tfoot></table>' +
       '<footer class="rodape"><span><i>☎</i>' + esc(C.fone) + ' · ' + esc(C.whats) + '</span><span><i>✉</i>' + esc(C.email) + '</span><span><i>⌂</i>' + esc(C.endereco) + '</span></footer></article>';
   }
-  window.MD = { md: md, esc: esc, folha: folha, fmtData: fmtData, ST: ST, setAssin: setAssin, bloco: bloco, chave: chave, assinaturaDe: function (n) { return ASSIN[chave(n)] || null; } };
+  window.MD = { md: md, esc: esc, folha: folha, fmtData: fmtData, ST: ST, setAssin: setAssin, bloco: bloco, chave: chave, assinaturaDe: function (n) { return achar(n); } };
 })();
