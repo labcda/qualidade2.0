@@ -10,7 +10,7 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-13c';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-13d';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
@@ -319,12 +319,66 @@
     o += '<div class="vidro pad" style="overflow:auto"><table class="tbl"><thead><tr><th>Data</th><th>Item</th><th>Responsável</th><th></th></tr></thead><tbody>' + (l.slice(0, 300).map(function (r) { return '<tr><td>' + (r.dia ? MD.fmtData(r.dia) : '—') + '</td><td>' + h(r.item || r.titulo) + '</td><td>' + h(r.usuario) + '</td><td><button class="btn p s" data-regver="' + r.id + '">Abrir</button></td></tr>'; }).join('') || '<tr><td colspan="4">Nenhum registro neste filtro.</td></tr>') + '</tbody></table>' + (l.length > 300 ? '<p style="color:var(--mut)">Mostrando 300 de ' + l.length + '. Use o filtro de mês para ver os demais.</p>' : '') + '</div>';
     return o;
   }
+  /* ---------- FR 044: gráficos do perfil de atendimento e comparação com o semestre anterior ---------- */
+  var COR_G = ['#10b5a4', '#0e9aa7', '#7c6cf0', '#d97706', '#dc2626', '#64748b', '#16a34a', '#06706a', '#db2777', '#ca8a04'];
+  function linhasG(dados, id, kNome, kVal) {
+    var v = dados && dados[id]; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+    return (Array.isArray(v) ? v : []).map(function (r) { return { n: String(r[kNome] || '').trim(), v: numBR(r[kVal]) }; }).filter(function (x) { return x.n && !isNaN(x.v) && x.v >= 0; });
+  }
+  function pctG(v, tot) { return tot ? Math.round(v / tot * 1000) / 10 : 0; }
+  function svgBarras(itens, tot) {
+    if (!itens.length) return ''; var max = Math.max.apply(null, itens.map(function (x) { return x.v; })) || 1, W = 620, L = 200, R = 120, H = 26;
+    return '<svg viewBox="0 0 ' + W + ' ' + (itens.length * H + 6) + '" style="width:100%;max-width:640px;font:12px sans-serif">' + itens.map(function (x, i) {
+      var w = Math.max(2, (W - L - R) * x.v / max), y = i * H + 3;
+      return '<text x="' + (L - 8) + '" y="' + (y + 16) + '" text-anchor="end" fill="#12302f">' + h(x.n.length > 30 ? x.n.slice(0, 29) + '…' : x.n) + '</text><rect x="' + L + '" y="' + (y + 3) + '" width="' + w.toFixed(1) + '" height="17" rx="4" fill="' + COR_G[0] + '"/><text x="' + (L + w + 6) + '" y="' + (y + 16) + '" fill="#12302f">' + x.v + (tot ? ' · ' + String(pctG(x.v, tot)).replace('.', ',') + '%' : '') + '</text>';
+    }).join('') + '</svg>';
+  }
+  function svgRosca(itens) {
+    var tot = itens.reduce(function (s, x) { return s + x.v; }, 0); if (!tot) return ''; var R0 = 62, R1 = 36, cx = 80, cy = 80, a0 = -Math.PI / 2, arcs = '', leg = '';
+    itens.forEach(function (x, i) {
+      var f = x.v / tot, a1 = a0 + f * 2 * Math.PI - (f >= 1 ? 0.0001 : 0), g = a1 - a0 > Math.PI ? 1 : 0;
+      var p = function (r, a) { return (cx + r * Math.cos(a)).toFixed(2) + ' ' + (cy + r * Math.sin(a)).toFixed(2); };
+      arcs += '<path d="M' + p(R0, a0) + ' A' + R0 + ' ' + R0 + ' 0 ' + g + ' 1 ' + p(R0, a1) + ' L' + p(R1, a1) + ' A' + R1 + ' ' + R1 + ' 0 ' + g + ' 0 ' + p(R1, a0) + ' Z" fill="' + COR_G[i % COR_G.length] + '"/>';
+      leg += '<g transform="translate(175,' + (18 + i * 22) + ')"><rect width="12" height="12" rx="3" fill="' + COR_G[i % COR_G.length] + '"/><text x="19" y="11" font-size="12" fill="#12302f">' + h(x.n) + ': ' + x.v + ' (' + String(pctG(x.v, tot)).replace('.', ',') + '%)</text></g>';
+      a0 += f * 2 * Math.PI;
+    });
+    return '<svg viewBox="0 0 520 ' + Math.max(160, itens.length * 22 + 30) + '" style="width:100%;max-width:520px;font-family:sans-serif">' + arcs + '<text x="80" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#12302f">' + tot + '</text>' + leg + '</svg>';
+  }
+  function svgPiramide(dados) {
+    var v = dados && dados.faixas; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (!Array.isArray(v)) return '';
+    var fx = v.map(function (r) { return { n: String(r['Faixa etária'] || '').trim(), f: numBR(r['Feminino']), m: numBR(r['Masculino']) }; }).filter(function (x) { return x.n && (!isNaN(x.f) || !isNaN(x.m)); }); if (!fx.length) return '';
+    fx.forEach(function (x) { x.f = isNaN(x.f) ? 0 : x.f; x.m = isNaN(x.m) ? 0 : x.m; }); var max = Math.max.apply(null, fx.map(function (x) { return Math.max(x.f, x.m); })) || 1, W = 620, mid = 310, esc = 200, H = 28;
+    return '<svg viewBox="0 0 ' + W + ' ' + (fx.length * H + 30) + '" style="width:100%;max-width:640px;font:12px sans-serif"><text x="' + (mid - 8) + '" y="12" text-anchor="end" fill="#db2777" font-weight="700">Feminino</text><text x="' + (mid + 8) + '" y="12" fill="#0e9aa7" font-weight="700">Masculino</text>' + fx.map(function (x, i) {
+      var y = 22 + i * H, wf = x.f / max * esc, wm = x.m / max * esc;
+      return '<rect x="' + (mid - 40 - wf).toFixed(1) + '" y="' + y + '" width="' + wf.toFixed(1) + '" height="20" rx="3" fill="#db2777"/><text x="' + (mid - 44 - wf).toFixed(1) + '" y="' + (y + 14) + '" text-anchor="end" fill="#12302f">' + x.f + '</text><rect x="' + (mid + 40) + '" y="' + y + '" width="' + wm.toFixed(1) + '" height="20" rx="3" fill="#0e9aa7"/><text x="' + (mid + 44 + wm).toFixed(1) + '" y="' + (y + 14) + '" fill="#12302f">' + x.m + '</text><text x="' + mid + '" y="' + (y + 14) + '" text-anchor="middle" fill="#55777a" font-size="10">' + h(x.n.replace(' anos ou mais', '+').replace(' anos', '')) + '</text>';
+    }).join('') + '</svg>';
+  }
+  function comparaAtend(d, a) {
+    var tr = [], num = function (o, k) { var n = numBR(o && o[k]); return isNaN(n) ? null : n; }, fm = function (x) { return x === null ? '—' : String(x).replace('.', ','); };
+    function lin(nome, v, vp, pct) { if (v === null) return; var dif = vp === null ? null : Math.round((v - vp) * 10) / 10; tr.push('<tr><td>' + h(nome) + '</td><td>' + fm(v) + (pct ? '%' : '') + '</td><td>' + (vp === null ? '—' : fm(vp) + (pct ? '%' : '')) + '</td><td' + (dif === null ? '' : ' style="color:' + (dif > 0 ? '#15803d' : dif < 0 ? '#dc2626' : 'inherit') + ';font-weight:700"') + '>' + (dif === null ? '—' : (dif > 0 ? '+' : '') + fm(dif) + (pct ? ' p.p.' : '')) + '</td></tr>'); }
+    lin('Total de atendimentos', num(d, 'total_atend'), num(a, 'total_atend')); lin('Total de exames', num(d, 'total_exames'), num(a, 'total_exames'));
+    [['convenios', 'Convênio', 'Atendimentos'], ['unidades', 'Unidade', 'Atendimentos']].forEach(function (g) {
+      var cu = linhasG(d, g[0], g[1], g[2]), pa = linhasG(a, g[0], g[1], g[2]), tc = cu.reduce(function (s, x) { return s + x.v; }, 0), tp = pa.reduce(function (s, x) { return s + x.v; }, 0);
+      cu.forEach(function (x) { var y = pa.filter(function (z) { return z.n.toLowerCase() === x.n.toLowerCase(); })[0]; lin(g[1] + ': ' + x.n + ' (% do total)', pctG(x.v, tc), y && tp ? pctG(y.v, tp) : null, true); });
+    });
+    return tr.length ? '<h4>Comparação com o semestre anterior' + (a && a.data ? ' (até ' + MD.fmtData(String(a.data).slice(0, 10)) + ')' : '') + '</h4><table class="tbl"><thead><tr><th>Indicador</th><th>Este período</th><th>Semestre anterior</th><th>Diferença</th></tr></thead><tbody>' + tr.join('') + '</tbody></table>' : '';
+  }
+  async function blocoFr044(r, dados) {
+    var d = dados || {}, tex = linhasG(d, 'top10', 'Exame', 'Quantidade').sort(function (x, y) { return y.v - x.v; }).slice(0, 10), totEx = numBR(d.total_exames), g = '';
+    if (tex.length) g += '<h4>Top 10 exames realizados</h4>' + svgBarras(tex, isNaN(totEx) ? 0 : totEx);
+    var un = linhasG(d, 'unidades', 'Unidade', 'Atendimentos'); if (un.length) g += '<h4>Atendimentos por unidade</h4>' + svgRosca(un);
+    var cv = linhasG(d, 'convenios', 'Convênio', 'Atendimentos'); if (cv.length) g += '<h4>Atendimentos por convênio</h4>' + svgRosca(cv);
+    var pir = svgPiramide(d); if (pir) g += '<h4>Pacientes por sexo e faixa etária</h4>' + pir;
+    var sc = linhasG(d, 'secoes', 'Seção', 'Exames').sort(function (x, y) { return y.v - x.v; }); if (sc.length) g += '<h4>Exames por seção</h4>' + svgBarras(sc, sc.reduce(function (s, x) { return s + x.v; }, 0));
+    var ant = null; try { var l = (await DB.registrosChave('FR 044')).filter(function (x) { return x.id !== r.id && (x.dia || '') < (r.dia || '9999') && x.dados; }).sort(function (a, b) { return a.dia < b.dia ? 1 : -1; }); ant = l[0] ? l[0].dados : null; } catch (e) { }
+    return (g ? '<h2>Gráficos do perfil de atendimento</h2><div class="g044">' + g + '</div>' : '') + comparaAtend(d, ant);
+  }
   function pgRegDetalhe() {
     var R = S.reg, r = S.d.regs.filter(function (x) { return x.id === R.id; })[0]; if (!r) { R.id = null; return pgRegLista(); }
     var lib = r.form && docPorCod(r.form), d = lib ? Object.assign({}, lib, { titulo: lib.titulo }) : { codigo: r.form || 'REG', titulo: r.titulo, versao: '1', status: 'vigente', tipo: 'FR' };
     var o = '<button class="voltar" data-regvolta2>← Voltar à lista</button><div class="barra-doc topo"><h1>' + h(r.form || 'Registro') + '<small>' + h(r.titulo) + (r.dia ? ' · ' + MD.fmtData(r.dia) : '') + '</small></h1><button class="btn" data-imprimir>🖨 Imprimir / salvar PDF</button></div>';
     var corpo = '<p>Registro preenchido no sistema' + (r.usuario ? ' por <b>' + h(r.usuario) + '</b>' : '') + (r.dia ? ' em <b>' + MD.fmtData(r.dia) + '</b>' : '') + (r.unidade ? ' · unidade ' + h(r.unidade) : '') + (r.item ? ' · item ' + h(r.item) : '') + '.</p><div id="reg-corpo">Carregando…</div><div class="assin" id="reg-ass">' + MD.bloco(r.usuario, 'Registrado por', r.dia || (r.criado_em || '').slice(0, 10), true) + '</div>';
-    setTimeout(async function () { try { var x = (await DB.registro(r.id)) || r, c = $('reg-corpo'); if (!c) return; var ass = $('reg-ass'); if (ass) signatariosDe(x.dados, r.usuario).forEach(function (n) { ass.insertAdjacentHTML('beforeend', MD.bloco(n, 'Assina o registro', r.dia, true)); }); var ks = camposVisiveis(x.dados); c.innerHTML = ks.length ? '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>' + ks.map(function (k) { return '<tr><td>' + h(rotuloCampo(k, r.form)) + '</td><td>' + valorHtml(x.dados[k]) + '</td></tr>'; }).join('') + '</tbody></table>' + (x.dados && x.dados._motivo_retificacao ? '<p><b>Retificação:</b> ' + h(x.dados._motivo_retificacao) + '</p>' : '') : '<p>Sem campos preenchidos.</p>'; } catch (e) { var c2 = $('reg-corpo'); if (c2) c2.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; } }, 30);
+    setTimeout(async function () { try { var x = (await DB.registro(r.id)) || r, c = $('reg-corpo'); if (!c) return; var ass = $('reg-ass'); if (ass) signatariosDe(x.dados, r.usuario).forEach(function (n) { ass.insertAdjacentHTML('beforeend', MD.bloco(n, 'Assina o registro', r.dia, true)); }); var ks = camposVisiveis(x.dados); c.innerHTML = ks.length ? '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>' + ks.map(function (k) { return '<tr><td>' + h(rotuloCampo(k, r.form)) + '</td><td>' + valorHtml(x.dados[k]) + '</td></tr>'; }).join('') + '</tbody></table>' + (x.dados && x.dados._motivo_retificacao ? '<p><b>Retificação:</b> ' + h(x.dados._motivo_retificacao) + '</p>' : '') : '<p>Sem campos preenchidos.</p>'; if (r.form === 'FR 044' && c) c.insertAdjacentHTML('beforeend', await blocoFr044(r, x.dados)); } catch (e) { var c2 = $('reg-corpo'); if (c2) c2.innerHTML = '<div class="erro">' + h(e.message) + '</div>'; } }, 30);
     return o + '<div class="fundo-folha">' + MD.folha(Object.assign({}, d, { titulo: lib ? lib.titulo : r.titulo }), corpo, { sem_assinatura: true }) + '</div>';
   }
   /* tabela de registros de um formulário num período (relatório de evidência e relatório do período) */
@@ -848,6 +902,7 @@
     { t: 'Conferir o cronograma de manutenção preventiva do mês', ref: 'FR 054 · PQ 052', freq: 'mensal', dm: 1, resp: 'Supervisor de Qualidade', form: 'FR 054', desde: '2026-11-01' },
     { t: 'Conferir os kits de emergência', ref: 'FR 080 · PQ 069', freq: 'mensal', dm: 1, resp: 'Chefe da Recepção', form: 'FR 080', desde: '2026-11-01' },
     { t: 'Conferir licenças e documentos externos (alvará, CNES, PCMSO, PGR)', ref: 'FR 073 · PQ 062', freq: 'trimestral', dm: 5, mes: 1, resp: 'Supervisor de Qualidade', form: 'FR 073', desde: '2026-10-05' },
+    { t: 'Analisar o perfil de atendimento do semestre', ref: 'FR 044 · PQ 034', freq: 'semestral', dm: 10, mes: 1, resp: 'Qualidade e Diretoria', form: 'FR 044', desde: '2027-01-01' },
     { t: 'Analisar a pesquisa de satisfação', ref: 'FR 024 · PQ 027', freq: 'semestral', dm: 10, mes: 1, resp: 'Supervisor de Qualidade', desde: '2026-07-10' },
     { t: 'Realizar a auditoria interna do semestre', ref: 'FR 008 · FR 040 · PQ 013', freq: 'semestral', dm: 5, mes: 6, resp: 'Supervisor de Qualidade', desde: '2026-06-05' },
     { t: 'Revisar a matriz de riscos e oportunidades', ref: 'FR 050 · PQ 049', freq: 'anual', dm: 10, mes: 1, resp: 'Supervisor de Qualidade', form: 'FR 050', desde: '2026-01-10' },

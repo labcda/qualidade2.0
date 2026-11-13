@@ -310,3 +310,6 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 .ap-tab td,.ap-tab th{padding:7px 10px;font-size:.8rem}
 .ap-tab tr.fora td{background:rgba(220,38,38,.08);color:#991b1b;font-weight:700}
 .ap-tab tr.ok td:last-child{color:#15803d;font-weight:800}
+
+/* FR 044: gráficos */
+.g044 svg{display:block;margin:4px 0 14px}.folha h4{margin:16px 0 6px;color:var(--esc)}

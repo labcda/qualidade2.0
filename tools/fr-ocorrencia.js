@@ -60,4 +60,17 @@ const FR042 = [
   '', '## 2. Retorno do apoio', '',
   'Quando o apoio devolve, o resultado é digitado em **Aguardando retorno do apoio**. O sistema mostra o limite aceitável de cada exame (tabela de tolerância por analito), calcula a variação entre o CDA e o apoio e indica se ficou dentro ou fora do limite. Resultado fora do limite exige ação corretiva registrada na própria tela.'
 ].join(NL);
-module.exports = { 'FR 006': FR006, 'FR 038': FR038, 'FR 039': FR039, 'FR 042': FR042 };
+const FR044 = [
+  'Formulário preenchido diretamente no sistema: **Qualidade 2.0 › Rotina do dia › Preencher formulário › FR 044**, a cada semestre (PQ 034). Os números do período são digitados em tabelas; o sistema calcula os percentuais, desenha os gráficos e compara com o semestre anterior.',
+  '', '| Bloco | Preenchimento | Gráfico gerado |', '|---|---|---|',
+  '| Período e totais | Data início e final; total de atendimentos e de exames | — |',
+  '| Top 10 exames | Exame e quantidade | Barras com quantidade e % do total |',
+  '| Por unidade | Matriz e Mata Fria: atendimentos | Rosca |',
+  '| Por convênio | Particular, Unimed e outros: atendimentos | Rosca |',
+  '| Sexo e faixa etária | Feminino e masculino em 0-12, 13-17, 18-39, 40-59 e 60+ (do relatório do laboratório) | Pirâmide etária |',
+  '| Por seção | Hematologia, Bioquímica, Imunologia e demais: exames | Barras |',
+  '| Análise crítica | Principais achados, metas, plano de ação (o quê, quem, até quando) e relatório final | — |',
+  '| Repasse | Repassado ao NSP (sim/não e data) e Diretor que analisou | — |',
+  '', 'O registro mostra a **comparação com o semestre anterior**: total de atendimentos, total de exames e, em pontos percentuais, a participação de cada convênio e de cada unidade.'
+].join(NL);
+module.exports = { 'FR 006': FR006, 'FR 038': FR038, 'FR 039': FR039, 'FR 042': FR042, 'FR 044': FR044 };
