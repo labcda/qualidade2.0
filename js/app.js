@@ -420,6 +420,13 @@
     return { pct: Number(t.percentual) || CQ_TOL, abs: isNaN(a) ? null : a, unidade: t.unidade || '', fonte: t.fonte || '', definido: true };
   }
   function limiteTxt(t) { return '±' + fmtN(t.pct) + '%' + (t.abs !== null ? ' ou ' + fmtN(t.abs) + (t.unidade ? ' ' + t.unidade : '') : ''); }
+  /* faixa de valores aceitável para o resultado do apoio (ou da reanálise), dado o valor do CDA: percentual e/ou absoluto */
+  function faixaApoio(an, cda, rep) {
+    var t = tolDe(an), p = t.pct / 100, lo, hi;
+    if (rep) { lo = cda * (1 - p); hi = cda * (1 + p); } else { lo = cda / (1 + p); hi = p < 1 ? cda / (1 - p) : Infinity; }
+    if (t.abs !== null) { lo = Math.min(lo, cda - t.abs); hi = Math.max(hi, cda + t.abs); }
+    return [lo, hi];
+  }
   function foraDe(an, ref, med, v) { var t = tolDe(an); return !(Math.abs(v) <= t.pct || (t.abs !== null && Math.abs(med - ref) <= t.abs)); }
   function cqLinhas(lista) {
     return lista.map(function (r) {
@@ -527,7 +534,20 @@
     var cda = numBR(l.valor_medido), rep = d.tipo === 'HEMA_REPET', ref = rep ? cda : n, med = rep ? n : cda;
     if (!ref) { out.textContent = 'referência zero: sem cálculo'; out.className = 'ap-var fora'; return; }
     var v = Math.round((med - ref) / ref * 10000) / 100, fora = foraDe(x.analito, ref, med, v), t = tolDe(x.analito);
-    out.textContent = 'Variação ' + (v > 0 ? '+' : '') + fmtN(v) + '% · ' + (fora ? 'FORA do limite' : 'dentro do limite') + ' (' + limiteTxt(t) + ')'; out.className = 'ap-var ' + (fora ? 'fora' : 'ok');
+    out.textContent = (fora ? '✖ ' : '✔ ') + 'Variação ' + (v > 0 ? '+' : '') + fmtN(v) + '% · ' + (fora ? 'FORA do limite' : 'dentro do limite') + ' (aceitável ' + limiteTxt(t) + ')'; out.className = 'ap-var ' + (fora ? 'fora' : 'ok');
+    resumoApoio(id);
+  }
+  /* lista que se monta sozinha conforme os valores do apoio são digitados */
+  function resumoApoio(id) {
+    var box = document.querySelector('[data-apres="' + id + '"]'), r = (S.apoio || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!box || !r) return;
+    var d = r.dados || {}, rep = d.tipo === 'HEMA_REPET', linhas = jsonSeg(d.linhas_json, []), tr = [], fora = 0;
+    (S.apRows[id] || []).forEach(function (x, i) {
+      var inp = document.querySelector('[data-apid="' + id + '"][data-api="' + i + '"]'), n = inp ? numBR(inp.value) : NaN, l = linhas.filter(function (y) { return y.analito === x.analito; })[0]; if (!l || isNaN(n)) return;
+      var cda = numBR(l.valor_medido), ref = rep ? cda : n, med = rep ? n : cda; if (!ref) return;
+      var v = Math.round((med - ref) / ref * 10000) / 100, f = foraDe(x.analito, ref, med, v); if (f) fora++;
+      tr.push('<tr class="' + (f ? 'fora' : 'ok') + '"><td><b>' + h(x.analito) + '</b></td><td>' + h(l.valor_medido) + '</td><td>' + h(inp.value) + '</td><td>' + (v > 0 ? '+' : '') + fmtN(v) + '%</td><td>' + limiteTxt(tolDe(x.analito)) + '</td><td>' + (f ? '✖ Fora' : '✔ Dentro') + '</td></tr>');
+    });
+    box.innerHTML = tr.length ? '<h4>Resumo das variações' + (fora ? ' · <span class="ap-fora-n">' + fora + ' fora do limite</span>' : ' · tudo dentro do limite') + '</h4><div style="overflow:auto"><table class="tbl ap-tab"><thead><tr><th>Exame</th><th>' + (rep ? 'Original' : 'CDA') + '</th><th>' + (rep ? 'Reanálise' : 'Apoio') + '</th><th>Variação</th><th>Aceitável</th><th>Situação</th></tr></thead><tbody>' + tr.join('') + '</tbody></table></div>' : '';
   }
 
   /* ---------- Controle da Analisa FIA 100 (semanal) ---------- */
@@ -1052,10 +1072,10 @@
     S.apRows[r.id] = rows;
     var corpo = rows.map(function (x, i) {
       var l = linhas.filter(function (y) { return y.analito === x.analito; })[0] || {};
-      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Original' : 'CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small></div><div class="ap-in"><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="' + (rep ? 'Reanálise' : h(x.lab)) + '"><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div><div class="ap-var" data-apvar="' + r.id + '|' + i + '"></div></div>';
+      return '<div class="ap-l"><div class="ap-a"><b>' + h(x.analito) + '</b><small>' + (rep ? 'Original' : 'CDA') + ': ' + h(l.valor_medido) + (l.equipamento ? ' · ' + h(l.equipamento) : '') + '</small><small class="ap-lim">Aceitável ' + limiteTxt(tolDe(x.analito)) + (isNaN(numBR(l.valor_medido)) ? '' : ' · de ' + fmtN(faixaApoio(x.analito, numBR(l.valor_medido), rep)[0]) + ' a ' + fmtN(faixaApoio(x.analito, numBR(l.valor_medido), rep)[1])) + '</small></div><div class="ap-in"><input inputmode="decimal" data-apid="' + r.id + '" data-api="' + i + '" placeholder="' + (rep ? 'Reanálise' : h(x.lab)) + '"><label class="ap-nf"><input type="checkbox" data-apid="' + r.id + '" data-apnf="' + i + '"> não feito</label></div><div class="ap-var" data-apvar="' + r.id + '|' + i + '"></div></div>';
     }).join('');
     return '<div class="vidro ap-card' + (aberto ? ' aberto' : '') + '" data-apcard="' + r.id + '"><button type="button" class="ap-head" data-apabrir="' + r.id + '"><span class="ap-tt"><b>Amostra ' + h(d.amostra) + '</b><small>' + h(nomeCqLongo(d.tipo)) + ' · coletada em ' + MD.fmtData(d.data) + '</small></span><span class="ap-meta"><span class="selo ' + (esp > 7 ? 'N' : 'P') + '">há ' + esp + ' dia' + (esp === 1 ? '' : 's') + '</span><em>' + rows.length + ' exame' + (rows.length === 1 ? '' : 's') + '</em><i class="ap-seta">▾</i></span></button>' +
-      '<div class="ap-corpo">' + (d.status === 'PARCIAL' ? '<p class="ap-obs">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + '<div class="ap-grid">' + (corpo || '<p>Tudo lançado.</p>') + '</div>' +
+      '<div class="ap-corpo">' + (d.status === 'PARCIAL' ? '<p class="ap-obs">Já foram lançados ' + feito.length + ' resultado(s); faltam os abaixo.</p>' : '') + '<div class="ap-grid">' + (corpo || '<p>Tudo lançado.</p>') + '</div><div class="ap-res" data-apres="' + r.id + '"></div>' +
       '<label class="cmp" style="margin-top:12px"><span>Ação corretiva (só se algum resultado ficar fora do limite do analito)</span><input data-apacao="' + r.id + '"></label><div class="bt"><button class="btn p v" data-apcancel="' + r.id + '">Cancelar envio</button><button class="btn" data-apsalvar="' + r.id + '">Salvar retorno</button></div></div></div>';
   }
   async function salvarApoio(id) {
