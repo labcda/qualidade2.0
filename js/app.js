@@ -10,7 +10,7 @@
   function modal(html, quando) { var o = document.createElement('div'); o.className = 'ov'; o.innerHTML = '<div class="md">' + html + '</div>'; document.body.appendChild(o); o.addEventListener('mousedown', function (e) { if (e.target === o) o.remove(); }); o.fechar = function () { o.remove(); }; if (quando) quando(o); return o; }
 
   /* ---------- dados e cálculos ---------- */
-  var BIB_VER = '2026-11-13a';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
+  var BIB_VER = '2026-11-13b';   // muda quando o texto da biblioteca é corrigido: no modo demonstração, reaplica os textos
   async function carregar() {
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
@@ -840,7 +840,7 @@
     { t: 'Controle interno da bioquímica no A15 (BioSystems e PNCQ), antes da rotina', ref: 'PQ 006 · ITA 013', freq: 'diaria', resp: 'Técnico da bancada', desde: '2026-11-10' },
     { t: 'Controle de sódio e potássio (um PNCQ e um BioSystems)', ref: 'PQ 006', freq: 'semanal', dow: 1, resp: 'Técnico da bancada', desde: '2026-11-09' },
     { t: 'Controle interno do hemograma (amostra-controle Diagon, três níveis)', ref: 'FR 029 · PQ 006', freq: 'semanal', dow: 1, resp: 'Técnico da hematologia', form: 'FR 029', desde: '2026-11-09' },
-    { t: 'Controle de aglutinação e floculação (ASO, FR e VDRL, positivo e negativo)', ref: 'FR 039 · PQ 006', freq: 'quinzenal', resp: 'Técnico da bancada', form: 'FR 039', desde: '2026-11-01' },
+    { t: 'Controle de aglutinação e floculação (ASO e FR, positivo e negativo)', ref: 'FR 039 · PQ 006', freq: 'quinzenal', resp: 'Técnico da bancada', form: 'FR 039', desde: '2026-11-01' },
     { t: 'Comparação mensal de amostras aleatórias com o laudo do laboratório de apoio', ref: 'PQ 006 · PQ 056', freq: 'mensal', dm: 1, resp: 'Responsável Técnico', desde: '2026-11-01' },
     { t: 'Lançar os indicadores do mês anterior', ref: 'FR 059 · PQ 053', freq: 'mensal', dm: 5, resp: 'Supervisor de Qualidade', desde: '2026-11-01' },
     { t: 'Aplicar o check list de manutenção predial', ref: 'FR 053 · PQ 052', freq: 'mensal', dm: 1, resp: 'Chefe da Recepção', form: 'FR 053', desde: '2026-11-01' },

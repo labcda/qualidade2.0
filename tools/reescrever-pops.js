@@ -102,6 +102,8 @@ const FRASES = [
   ["PQ 025","Em qualquer incêndio, aciona-se imediatamente o Corpo de Bombeiros (193).","Em qualquer incêndio, aciona-se imediatamente a brigada interna e o serviço de emergência disponível no município (telefones do quadro de emergência: SAMU 192, Polícia Militar 190, Defesa Civil 199)."],
   ["PQ 050","acionar o Corpo de Bombeiros;","acionar a brigada interna e o serviço de emergência do município (SAMU 192, Polícia Militar 190, Defesa Civil 199);"],
   ["FR 054","| Elevador |  |  |  |  |  |\n",""],
+  ["PQ 006","Testes de aglutinação/floculação (ASO, FR e VDRL)","Testes de aglutinação/floculação (ASO e FR)"],
+  ["PQ 006","Fator reumatoide","Fator reumatoide"],
   ["PQ 050","laboratório de apoio, Bombeiros, concessionária","laboratório de apoio, serviços de emergência do município (SAMU, Polícia Militar, Defesa Civil), concessionária"],
   ['PQ 038', 'Por definição do NSP, toda notificação deve ser levada de forma verbal a algum membro do NSP e o mesmo ficará responsável pela notificação no NOTIVISA.', 'Toda notificação é registrada pelo próprio colaborador no sistema (Não conformidades › Nova ocorrência); o Responsável Técnico e o NSP recebem a ocorrência na fila de análise e ficam responsáveis pela notificação no NOTIVISA.'],
   ['PQ 038', 'comunicar verbalmente ao NSP qualquer incidente ou evento adverso e preencher o formulário interno.', 'registrar no sistema (Não conformidades › Nova ocorrência) qualquer incidente ou evento adverso que identificar, no mesmo dia; o aviso verbal ao NSP não substitui o registro.'],
