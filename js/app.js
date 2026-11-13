@@ -719,10 +719,11 @@
   /* ---------- Preencher formulário: todos os FR da Qualidade anterior ---------- */
   function defForm(cod) { return window.Q2_FORMS.filter(function (f) { return f.c === cod; })[0]; }
   function camposDe(f) { return f.modo === 'mensal' ? (f.cols || []) : (f.campos || []); }
-  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }, { c: 'FR 001', t: 'Controle de Temperatura de Estocagem de Reagentes e Amostras', cat: 'Temperatura e ambiente', modo: 'temp' }]); }
+  function catalogoForms() { return window.Q2_FORMS.concat([{ c: 'FIA', t: 'Controle da Analisa FIA 100 (semanal)', cat: 'Controle interno e laboratório de apoio', modo: 'fia' }, { c: 'FR 001', t: 'Controle de Temperatura de Estocagem de Reagentes e Amostras', cat: 'Temperatura e ambiente', modo: 'temp' }, { c: 'APOIO BIOQ', t: 'Bioquímica · amostra enviada ao laboratório de apoio', cat: 'Controle interno e laboratório de apoio', modo: 'apoio' }, { c: 'APOIO HEMA', t: 'Hematologia · amostra enviada ao laboratório de apoio', cat: 'Controle interno e laboratório de apoio', modo: 'apoio' }]); }
   function pgForms() {
     var R = S.frm || (S.frm = { cod: '', q: '' });
     if (R.cod === 'FR 006' || R.cod === 'FR 038') { var tp0 = R.cod === 'FR 006' ? 'nc' : 'evento'; R.cod = ''; S.nc = { id: null, novo: true, tipo: tp0, f: 'abertas', ft: '' }; setTimeout(function () { irPara('nc'); }, 0); return '<div class="vazio">Abrindo o registro de ocorrências…</div>'; }
+    if (R.cod === 'APOIO BIOQ' || R.cod === 'APOIO HEMA') { var tpA = R.cod === 'APOIO BIOQ' ? 'BIOQ_APOIO' : 'HEMA_APOIO'; R.cod = ''; S.rdTab = 'apoio'; setTimeout(function () { irPara('registros'); setTimeout(function () { modalEnviarApoio(tpA); }, 250); }, 0); return '<div class="vazio">Abrindo o registro de amostra enviada ao apoio…</div>'; }
     if (R.cod === 'FR 001') { R.cod = ''; S.rdTab = 'temp'; setTimeout(function () { irPara('registros'); }, 0); return '<div class="vazio">Abrindo o registro de temperaturas…</div>'; }
     if (R.cod === 'FIA') { R.cod = ''; S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false }; S.cq.fia = true; return pgFia(); }
     if (R.cod) return pgFormPreencher();
@@ -1010,7 +1011,7 @@
   var AN_BIOQ = ['Glicose', 'Colesterol', 'Triglicerídeos', 'Ácido úrico', 'CPK', 'Creatinina', 'Ureia', 'TGO', 'TGP', 'Bilirrubina total', 'Bilirrubina direta', 'Gama GT'];
   var APOIOS = ['Alvaro Apoio', 'DB Diagnósticos do Brasil', 'Hermes Pardini'];
   var APOIO_TIPOS = { HEMA_APOIO: { nome: 'Hematologia', equips: ['Sysmex KX', 'Zybio Z3'], an: AN_HEMO, rot: 'Hema apoio' }, BIOQ_APOIO: { nome: 'Bioquímica', equips: ['Biosystems A15'], an: AN_BIOQ, rot: 'Bioq apoio' } };
-  function modalEnviarApoio() {
+  function modalEnviarApoio(tipoIni) {
     var opAp = function (vazio) { return (vazio ? '<option value="">—</option>' : '') + APOIOS.map(function (x) { return '<option>' + h(x) + '</option>'; }).join(''); };
     var o = modal('<h3>Amostra enviada ao laboratório de apoio</h3><p style="color:var(--mut);font-size:.84rem;margin:0 0 10px">Registre aqui os valores medidos no CDA. Quando o apoio devolver o resultado, digite-o em <b>Aguardando retorno do apoio</b>: o sistema calcula a variação e confere a tolerância.</p>' +
       '<div class="hj-campos"><label class="cmp"><span>Controle <i class="obr">*</i></span><select id="ap-tipo"><option value="HEMA_APOIO">Hematologia</option><option value="BIOQ_APOIO">Bioquímica</option></select></label>' +
@@ -1023,7 +1024,7 @@
       '<div class="bt" style="margin-top:12px"><button class="btn" data-apsalvar>Registrar envio</button><button class="btn s" data-x>Cancelar</button></div>', function (m) {
       var tp = m.querySelector('#ap-tipo');
       function pinta() { var t = APOIO_TIPOS[tp.value]; m.querySelector('#ap-eq').innerHTML = t.equips.map(function (x) { return '<option>' + h(x) + '</option>'; }).join(''); m.querySelector('#ap-an').innerHTML = t.an.map(function (n, i) { return '<label class="cmp"><span>' + h(n) + '</span><input inputmode="decimal" data-apv="' + i + '"></label>'; }).join(''); }
-      tp.onchange = pinta; pinta(); m.querySelector('[data-x]').onclick = m.fechar;
+      if (tipoIni) tp.value = tipoIni; tp.onchange = pinta; pinta(); m.querySelector('[data-x]').onclick = m.fechar;
       m.querySelector('[data-apsalvar]').onclick = async function () { try { await salvarEnvioApoio(m); m.fechar(); } catch (er) { toast(er.message, 1); } };
     });
   }
