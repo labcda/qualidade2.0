@@ -187,7 +187,7 @@
     var pode = DB.pode('escrever'), reqs = REQ.filter(function (r) { return (r[6] || []).indexOf(d.codigo) >= 0; });
     var o = '<button class="voltar" data-voltar>← Voltar aos documentos</button><div class="barra-doc topo"><h1>' + h(d.codigo) + '<small>' + h(d.titulo) + '</small></h1><span class="selo ' + d.status + '">' + MD.ST[d.status] + '</span>' +
       '<button class="btn" data-imprimir>🖨 Imprimir</button>' + (pode ? '<button class="btn s" data-editar>✎ Editar</button>' : '') + (pode && d.status === 'rascunho' ? '<button class="btn s" data-sit="em_revisao">Enviar para revisão</button>' : '') + (DB.pode('aprovar') && d.status !== 'vigente' ? '<button class="btn" style="background:#16a34a" data-sit="vigente">✔ Aprovar e publicar</button>' : '') + (pode && d.status === 'vigente' ? '<button class="btn s" data-novaver>Nova versão</button>' : '') + '<button class="btn s" data-hist>Histórico</button></div>';
-    o += '<div class="fundo-folha">' + MD.folha(d, cienciaWrap(d, d.texto && d.texto.length > 10 ? MD.md(d.texto) : '<div class="vazio nao-imprime">Este documento ainda não tem texto no sistema. ' + (pode ? 'Clique em Editar para escrever ou colar o conteúdo.' : '') + '</div>')) + '</div>' + painelCiencia(d);
+    o += avisoAssinaturas(d) + '<div class="fundo-folha">' + MD.folha(d, cienciaWrap(d, d.texto && d.texto.length > 10 ? MD.md(d.texto) : '<div class="vazio nao-imprime">Este documento ainda não tem texto no sistema. ' + (pode ? 'Clique em Editar para escrever ou colar o conteúdo.' : '') + '</div>')) + '</div>' + painelCiencia(d);
     if (reqs.length) o += '<div class="vidro pad nao-imprime" style="margin-top:18px"><b>Este documento comprova os requisitos:</b><div class="chips" style="margin:10px 0 0">' + reqs.map(function (r) { return '<button class="chip" data-req="' + r[0] + '">' + r[0] + '</button>'; }).join('') + '</div></div>';
     return o;
   }
@@ -203,10 +203,22 @@
       };
     });
   }
+  /* mostra por que uma assinatura do documento não saiu: etapa sem responsável/data ou nome sem assinatura cadastrada */
+  function avisoAssinaturas(d) {
+    var et = [['Elaboração', d.elaborador, d.data_elaboracao], ['Revisão', d.revisor, d.data_revisao], ['Aprovação', d.aprovador, d.data_vigencia]], p = [];
+    et.forEach(function (e) {
+      if (e[0] !== 'Elaboração' && d.status === 'rascunho') return; if (e[0] === 'Aprovação' && d.status !== 'vigente') return;
+      if (!e[1] || !e[2]) p.push(e[0] + ': sem ' + (!e[1] ? 'responsável' : 'data') + ' registrado');
+      else if (!MD.assinaturaDe(e[1])) p.push(e[0] + ': "' + e[1] + '" não tem assinatura cadastrada (Ajustes › Assinaturas, o nome precisa ser igual)');
+    });
+    if (!p.length) return '';
+    var completar = d.status === 'vigente' && DB.pode('aprovar') && (!d.aprovador || !d.data_vigencia || !d.revisor || !d.data_revisao);
+    return '<div class="hj-av nao-imprime" style="background:#fef3c7;color:#92400e;margin-bottom:10px"><b>Assinaturas incompletas neste documento:</b><ul style="margin:6px 0 0 18px">' + p.map(function (x) { return '<li>' + h(x) + '</li>'; }).join('') + '</ul>' + (completar ? '<div style="margin-top:8px"><button class="btn s" data-sit="vigente">Completar aprovação em meu nome</button></div>' : '') + '</div>';
+  }
   async function mudarSit(d, st) {
     if (st === 'vigente' && !DB.pode('aprovar')) return toast('Somente quem tem perfil de aprovação (Responsável Técnico ou Diretoria) libera um documento como vigente.', 1);
     var n = { id: d.id, status: st }; if (st === 'em_revisao') { n.data_revisao = hoje(); n.revisor = DB.user.nome; }
-    if (st === 'vigente') { n.aprovador = DB.user.nome; n.data_vigencia = hoje(); var p = new Date(); p.setFullYear(p.getFullYear() + 1); n.proxima_revisao = p.toISOString().slice(0, 10); }
+    if (st === 'vigente') { n.aprovador = DB.user.nome; n.data_vigencia = hoje(); if (!d.revisor || !d.data_revisao) { n.revisor = d.revisor || DB.user.nome; n.data_revisao = d.data_revisao || hoje(); } if (!d.elaborador || !d.data_elaboracao) { n.elaborador = d.elaborador || DB.user.nome; n.data_elaboracao = d.data_elaboracao || hoje(); } var p = new Date(); p.setFullYear(p.getFullYear() + 1); n.proxima_revisao = p.toISOString().slice(0, 10); }
     try { await DB.addVersao({ doc_id: d.id, versao: d.versao, status: st, texto: d.texto, autor: DB.user.nome, motivo: 'Situação: ' + MD.ST[st] }); await DB.saveDoc(Object.assign({}, d, n)); await carregar(); render(); toast('Situação atualizada: ' + MD.ST[st]); } catch (e) { toast(e.message, 1); }
   }
   async function novaVersao(d) {
