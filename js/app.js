@@ -83,11 +83,32 @@
 
   /* ---------- estrutura ---------- */
   var MENU = [['inicio', '⌂', 'Início'], ['programa', '✓', 'Autoavaliação'], ['docs', '▤', 'Documentos'], ['legais', '⚖', 'Documentos legais'], ['registros', '☰', 'Registros do dia'], ['frm', '✎', 'Preencher formulário'], ['regs', '▦', 'Formulários preenchidos'], ['nc', '⚑', 'Não conformidades'], ['cq', '◔', 'Controle analítico'], ['ind', '▥', 'Indicadores'], ['relatorio', '⎙', 'Relatório'], ['ajustes', '⚙', 'Ajustes']];
+  /* ---------- estrutura do menu: 6 áreas, cada uma com abas (as telas são as mesmas; mudou onde ficam) ---------- */
+  var AREAS = [
+    { id: 'inicio', ic: '⌂', t: 'Início', abas: [['inicio', 'Início']] },
+    { id: 'rotina', ic: '☑', t: 'Rotina do dia', abas: [['registros', 'Hoje'], ['frm', 'Preencher formulário'], ['regs', 'Formulários preenchidos']] },
+    { id: 'controle', ic: '◔', t: 'Controle da qualidade', abas: [['cq', 'Controle analítico'], ['fia', 'FIA 100'], ['tol', 'Tolerâncias'], ['ind', 'Indicadores'], ['nc', 'Não conformidades']] },
+    { id: 'docs', ic: '▤', t: 'Documentos', abas: [['docs', 'POPs, formulários e manuais'], ['legais', 'Documentos legais']] },
+    { id: 'programa', ic: '✓', t: 'Programa Unimed', abas: [['programa', 'Autoavaliação'], ['relatorio', 'Relatório de conformidade']] },
+    { id: 'ajustes', ic: '⚙', t: 'Ajustes', abas: [['ajustes', 'Assinaturas, usuários e biblioteca']] }
+  ];
+  function abaAtual() { if (S.pg === 'cq') return S.cq && S.cq.fia ? 'fia' : S.cq && S.cq.tol ? 'tol' : 'cq'; return S.pg === 'evid' ? 'programa' : S.pg; }
+  function areaDe(aba) { return AREAS.filter(function (a) { return a.abas.some(function (b) { return b[0] === aba; }); })[0] || AREAS[0]; }
+  function irAba(id) {
+    if (id === 'cq' || id === 'fia' || id === 'tol') { S.cq = S.cq || { tipo: '', per: 90, analito: '', rel: false, tol: false }; S.cq.fia = id === 'fia'; S.cq.tol = id === 'tol'; S.cq.rel = false; return irPara('cq'); }
+    if (id === 'regs') S.reg = Object.assign(S.reg || {}, { chave: '', id: null, rel: false });
+    return irPara(id);
+  }
+  function barraAbas() {
+    var ar = areaDe(abaAtual()); if (ar.abas.length < 2) return '';
+    var at = abaAtual(), nn = S.d.nc.filter(function (x) { return x.status === 'aberta'; }).length;
+    return '<nav class="abas nao-imprime">' + ar.abas.map(function (b) { return '<button class="aba' + (at === b[0] ? ' on' : '') + '" data-aba="' + b[0] + '">' + h(b[1]) + (b[0] === 'nc' && nn ? '<em>' + nn + '</em>' : '') + '</button>'; }).join('') + '</nav>';
+  }
   function irPara(p, extra) { S.pg = p; if (extra) Object.assign(S, extra); if (p !== 'docs') S.docId = null; render(); window.scrollTo(0, 0); $('side').classList.remove('aberto'); history.replaceState(null, '', '#' + p); }
   function menu() {
     var u = DB.user, pend = S.d.legais.filter(function (l) { var n = dias(l.validade); return n !== null && n <= 60; }).length;
     $('side').innerHTML = '<div class="marca"><img src="img/logo-cda.png" alt="CDA"><div><b>Qualidade 2.0</b><small>Laboratório CDA</small></div></div>' +
-      MENU.map(function (m, i) { return (i === 10 ? '<div class="tit">Consulta</div>' : '') + '<button class="nv' + (S.pg === m[0] ? ' on' : '') + '" data-ir="' + m[0] + '"><i>' + m[1] + '</i><span>' + m[2] + '</span>' + (m[0] === 'legais' && pend ? '<em>' + pend + '</em>' : '') + '</button>'; }).join('') +
+      AREAS.map(function (a) { var ativa = areaDe(abaAtual()).id === a.id, badge = a.id === 'docs' && pend ? pend : 0; return '<button class="nv' + (ativa ? ' on' : '') + '" data-area="' + a.id + '"><i>' + a.ic + '</i><span>' + a.t + '</span>' + (badge ? '<em>' + badge + '</em>' : '') + '</button>'; }).join('') +
       '<div class="eu"><div class="av">' + h((u.nome || '?').charAt(0).toUpperCase()) + '</div><div><b>' + h(u.nome) + '</b><small>' + h(({ admin: 'Administrador', elabora: 'Elabora', revisa: 'Revisa', aprova: 'Aprova', consulta: 'Consulta' })[u.papel]) + (DB.demo ? ' · demonstração' : '') + '</small></div><button data-sair>Sair</button></div>';
   }
   function topo(t, s, extra) { return '<div class="topo"><button class="menu-m" data-menu>☰ Menu</button><h1>' + t + (s ? '<small>' + s + '</small>' : '') + '</h1>' + (extra || '') + '<div class="busca" data-busca>🔎 Procurar <kbd>Ctrl K</kbd></div></div>'; }
@@ -126,6 +147,7 @@
     menu(); var m = $('main');
     var f = { inicio: pgInicio, programa: pgPrograma, docs: pgDocs, legais: pgLegais, registros: pgRegistros, frm: pgForms, regs: pgRegs, cq: pgCq, nc: pgNc, ind: pgInd, evid: pgEvid, relatorio: pgRelatorio, ajustes: pgAjustes }[S.pg] || pgInicio;
     m.innerHTML = f();
+    try { S.abaArea = S.abaArea || {}; S.abaArea[areaDe(abaAtual()).id] = abaAtual(); var tb = barraAbas(); if (tb) { var tp = m.querySelector('.topo'); if (tp) tp.insertAdjacentHTML('afterend', tb); else m.insertAdjacentHTML('afterbegin', tb); } } catch (e) { }
     if (S.pg === 'inicio') requestAnimationFrame(function () { document.querySelectorAll('.bar i[data-w]').forEach(function (e) { e.style.width = e.dataset.w + '%'; }); var a = $('anelc'); if (a) a.style.strokeDashoffset = a.dataset.off; });
   }
   function barra(o, tot) { var seg = [['A', RCOR.A], ['P', RCOR.P], ['N', RCOR.N], ['F', RCOR.F], ['NA', RCOR.NA]]; return '<div class="bar">' + seg.map(function (s) { return '<i style="width:0;background:' + s[1] + '" data-w="' + (tot ? (o[s[0]] / tot * 100).toFixed(1) : 0) + '"></i>'; }).join('') + '</div>'; }
@@ -1048,8 +1070,7 @@
     var tab = S.rdTab || 'hoje', dia = S.rdia || hoje(), o = topo('Registros do dia', 'Tudo o que se preenche na rotina do laboratório');
     function aba(id, ic, t, d, extra) { return '<button type="button" class="vidro pad rd-card' + (tab === id ? ' on' : '') + '" data-rdtab="' + id + '"><span class="rd-ic">' + ic + '</span><b>' + t + (extra || '') + '</b><small>' + d + '</small></button>'; }
     var ph = pendHoje(S.rdData || hoje()) + atrasos().reduce(function (s, x) { return s + x.itens.length; }, 0) + tarefasAtrasadas().length;
-    o += '<div class="anim rd-tabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">' + aba('hoje', '✅', 'O que preencher hoje', 'Limpeza, temperatura e umidade, geladeiras', ph ? '<em class="rd-n">' + ph + '</em>' : '') + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') +
-      '<button type="button" class="vidro pad rd-card" data-ir="frm"><span class="rd-ic">✎</span><b>Outros formulários</b><small>Todos os formulários e controles da qualidade</small></button><button type="button" class="vidro pad rd-card" data-ir="cq"><span class="rd-ic">◔</span><b>Variação dos resultados</b><small>Controle analítico: tabela, gráfico e relatório</small></button><button type="button" class="vidro pad rd-card" data-ir="regs"><span class="rd-ic">▦</span><b>Formulários preenchidos</b><small>Ver e imprimir o que já foi registrado</small></button></div>';
+    o += '<div class="anim rd-tabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">' + aba('hoje', '✅', 'O que preencher hoje', 'Limpeza, temperatura e umidade, geladeiras', ph ? '<em class="rd-n">' + ph + '</em>' : '') + aba('apoio', '⏳', 'Aguardando retorno do apoio', 'Digite o que o laboratório de apoio devolveu', '<em class="rd-n" id="apoio-n"></em>') + aba('temp', '🌡️', 'Temperaturas', 'Geladeiras, freezer, banho-maria e ambiente') + '</div>';
     if (tab === 'hoje') o += pgHoje();
     else if (tab === 'apoio') o += '<div id="apoio-box"><div class="vazio">Carregando…</div></div>';
     else { o += '<div class="barra"><input type="date" id="r-dia" value="' + dia + '" style="max-width:190px"><button class="btn s p" data-rhoje>Hoje</button></div><div class="vidro pad" id="temp-box"><div class="vazio">Carregando…</div></div>'; setTimeout(carregaTemp, 30); }
@@ -1159,6 +1180,8 @@
   document.addEventListener('click', async function (e) {
     var t = e.target.closest ? e.target : e.target.parentElement; if (!t.closest) return; var a;
     if (t.closest('[data-fecha]')) { var ov = t.closest('.ov'); setTimeout(function () { if (ov) ov.remove(); }, 0); }
+    if ((a = t.closest('[data-aba]'))) return irAba(a.dataset.aba);
+    if ((a = t.closest('[data-area]'))) { var ar = AREAS.filter(function (x) { return x.id === a.dataset.area; })[0]; return irAba(areaDe(abaAtual()).id === ar.id ? ar.abas[0][0] : ((S.abaArea || {})[ar.id] || ar.abas[0][0])); }
     if ((a = t.closest('[data-ir]'))) return irPara(a.dataset.ir);
     if ((a = t.closest('[data-dom]'))) return irPara('programa', { dom: a.dataset.dom, filtro: 'todos' });
     if ((a = t.closest('[data-filtro]'))) { S.filtro = a.dataset.filtro; return render(); }

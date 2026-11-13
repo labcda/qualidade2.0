@@ -294,3 +294,10 @@ h2.sec span{background:var(--tq);color:#fff;border-radius:9px;padding:0 8px;font
 .cien-v{color:#16a34a;font-weight:800;width:16px;text-align:center}
 .cien-tab td,.cien-tab th{vertical-align:middle}
 .fv-pick{margin:4px 0 8px}.fv-pick small{color:var(--mut)}
+
+/* abas dentro de cada área do menu */
+.abas{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin:2px 0 18px;padding:5px;background:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.9);border-radius:16px;backdrop-filter:blur(6px);scrollbar-width:thin}
+.aba{flex:0 0 auto;border:0;background:transparent;color:var(--tx);padding:9px 16px;border-radius:12px;font-weight:800;font-size:.82rem;display:flex;gap:8px;align-items:center;white-space:nowrap;transition:.16s;cursor:pointer}
+.aba:hover{background:rgba(14,154,167,.1)}
+.aba.on{background:var(--tq);color:#fff;box-shadow:0 6px 14px rgba(14,154,167,.3)}
+.aba em{font-style:normal;background:#ef4444;color:#fff;border-radius:9px;padding:0 7px;font-size:.66rem;font-weight:800}
