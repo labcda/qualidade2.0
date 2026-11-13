@@ -15,9 +15,32 @@
     var r = await Promise.all([DB.docs(), DB.respostas(), DB.evid(), DB.legais(), DB.equip(), DB.temps(somaDias(hoje(), -400), hoje()), DB.registrosResumo(), DB.tolerancias(), DB.fia(), DB.fiaFaixas(), DB.assinaturas(), DB.indicadores(), DB.ncs(), DB.diasHema(), DB.hemaPendentes(), DB.ciencias()]);
     S.d.docs = r[0]; S.d.resp = r[1]; S.d.evid = r[2]; S.d.legais = r[3]; S.d.equip = r[4]; S.d.temps = r[5]; S.d.regs = r[6] || []; S.d.tol = {}; (r[7] || []).forEach(function (t) { S.d.tol[t.chave] = t; }); S.d.fia = r[8] || []; S.d.fiaFx = r[9] || null; S.d.assin = r[10] || []; MD.setAssin(S.d.assin); S.d.indDef = (r[11] && r[11].defs) || []; S.d.indVal = (r[11] && r[11].vals) || []; S.d.indErro = (r[11] && r[11].erro) || ''; S.d.ncErro = r[12] === null; S.d.nc = r[12] || []; S.d.hema = r[13] || []; S.d.hemaPend = r[14] || []; S.d.cienc = r[15] || [];
     if (DB.demo && !S.d.docs.length) { await semear(true); }
+    sincronizaAssinaturasPainel();
     /* no banco real: quando a biblioteca é corrigida (BIB_VER muda), o primeiro usuário com permissão de escrita que abrir o sistema aplica os textos novos sozinho; o texto anterior fica no histórico de versões */
     if (!DB.demo && S.d.docs.length && DB.pode('escrever')) { var jaFez = ''; try { jaFez = localStorage.getItem('q2_bib_ver_real'); } catch (e) { } if (jaFez !== BIB_VER) { try { try { localStorage.setItem('q2_bib_ver_real', BIB_VER); } catch (e) { } var qt = await semear(true); if (qt) setTimeout(function () { toast('Biblioteca atualizada: ' + qt + ' documento(s) com texto novo (o anterior ficou no histórico de versões).'); }, 500); } catch (e) { try { localStorage.removeItem('q2_bib_ver_real'); } catch (e2) { } setTimeout(function () { toast('Não consegui atualizar a biblioteca: ' + (e.message || e), 1); }, 500); } } }
     if (DB.demo && S.d.docs.length) { try { if (localStorage.getItem('q2_bib_ver') !== BIB_VER) { var up = (window.Q2_DOCS || []).filter(function (d) { return !!d.origem; }).map(function (d) { return { codigo: d.codigo, titulo: d.titulo, unidade: d.unidade || 'Matriz', texto: d.texto }; }); await DB.saveDocs(up); localStorage.setItem('q2_bib_ver', BIB_VER); S.d.docs = await DB.docs(); } } catch (e) { } }
+  }
+  /* As assinaturas ficam no Cadastro de assinaturas do painel (Ajustes). Dentro do painel, a Qualidade 2.0 pede essa lista e guarda uma cópia no próprio banco (q2_assinaturas), que é de onde saem nos POPs e formulários. Só quem tem perfil de aprovação grava. */
+  var ASS_SYNC = false;
+  function sincronizaAssinaturasPainel() {
+    if (ASS_SYNC || DB.demo || window.parent === window || !DB.pode('aprovar')) return; ASS_SYNC = true;
+    var feito = false, quando = function (e) {
+      if (e.source !== window.parent || !e.data || e.data.tipo !== 'q2-assinaturas' || feito) return; feito = true; window.removeEventListener('message', quando);
+      (async function () {
+        try {
+          var lista = e.data.lista || [], mudou = 0;
+          for (var i = 0; i < lista.length; i++) {
+            var a = lista[i], k = MD.chave(a.nome), ex = S.d.assin.filter(function (x) { return MD.chave(x.nome) === k; })[0];
+            if (ex && ex.imagem === a.imagem && ex.ativo !== false) continue;
+            await DB.saveAssinatura({ nome: ex ? ex.nome : a.nome, cargo: a.cargo || (ex && ex.cargo) || '', registro: (ex && ex.registro) || '', imagem: a.imagem, ativo: true, atualizado_por: 'Cadastro de assinaturas do painel' }); mudou++;
+          }
+          if (mudou) { S.d.assin = await DB.assinaturas(); MD.setAssin(S.d.assin); render(); toast(mudou + ' assinatura(s) trazida(s) do Cadastro de assinaturas do painel.'); }
+        } catch (er) { console.warn('[assinaturas do painel]', er); }
+      })();
+    };
+    window.addEventListener('message', quando);
+    try { window.parent.postMessage({ tipo: 'q2-assinaturas-pedir' }, '*'); } catch (e) { }
+    setTimeout(function () { window.removeEventListener('message', quando); }, 15000);
   }
   async function semear(silencioso) {
     var docs = (window.Q2_DOCS || []).map(function (d) { return Object.assign({ unidade: 'Matriz', versao: '1', status: 'rascunho', elaborador: 'Diêgo Padua Silva', data_elaboracao: '2026-11-06' }, d); });
